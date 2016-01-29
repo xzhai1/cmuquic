@@ -1,0 +1,95 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{comment}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\author{Spencer Baugh (sbaugh), Xingda Zhai (xingdaz)}
+\title{Project Proposal: Fast, Production-Ready Implementation of QUIC}
+\date{\today}
+\begin{document}
+\maketitle
+
+\section{Problem Description}
+
+QUIC is a new transport protocol for the web, developed by Google.
+It is implemented on top of UDP, and it replaces TCP and TLS with a single protocol.
+It shares several features with SPDY,
+a protocol developed by Google for the purpose of speeding up HTTP connections, which was layered on top of TCP and TLS.
+However, unlike SPDY, QUIC replaces TCP and TLS, reimplementing the necessary features.
+QUIC is an ``application-level protocol'', and is not intended to be deployed in kernel space;
+this allows bypassing the slow pace of kernel development.
+
+Key advantages of QUIC over TCP+TLS+SPDY include:
+\begin{itemize}
+\item Reduced connection establishment latency
+\item Improved congestion control
+\item Multiplexing without head-of-line blocking
+\item Forward error correction
+\item Connection migration between links
+\end{itemize}
+
+Google has been running its QUIC implementation for traffic between the Chrome browser and its servers
+and has reported drastic performance improvements for web and especially Youtube videos:
+for page loading, 3% faster and 30% fewer video rebuffers.
+
+While the client-side implementation of QUIC in Chrome is open source and production quality,
+there is only a toy server example out in the wild.
+Without a high quality and fast open source implementation,
+QUIC adoption is stalled.
+
+Therefore, we will implement a high performance QUIC server
+using the Data Plane Development Toolkit (DPDK),
+a set of libraries and drivers useful for implementing fast packet processing on Intel CPUs.
+With the speed of DPDK and the architectural improvements of QUIC,
+we hope our implementation will compare favorably to the traditional TCP+TLS+HTTP stack,
+and even compete with TCP+TLS+SPDY or TCP+TLS+HTTP2.
+
+\section{Milestones}
+
+\begin{enumerate}
+\item Research the QUIC protocol, assembling the documents we will use as a reference while implementing it.
+  \begin{itemize}
+  \item 
+    \href{https://tools.ietf.org/html/draft-tsvwg-quic-protocol-02}{Draft RFC for the QUIC protocol}
+  \item 
+    \href{https://tools.ietf.org/html/draft-quic-loss-recovery}{Draft RFC for the QUIC protocol's loss recovery and congestion control techniques}
+  \item 
+    \href{https://docs.google.com/document/d/1g5nIXAIkN_Y-7XJW5K45IblHd_L2f5LTaDUDwvZ5L6g/}{QUIC protocol documentation}
+  \end{itemize}
+\item
+  Examine the implementation and design decisions in the 
+  \href{https://chromium.googlesource.com/chromium/src/+/master/net/tools/quic/}{toy server and client} 
+  provided by Google.
+\item 
+  Familiarize ourselves with \href{http://dpdk.org/doc}{DPDK}.
+  As neither of us have any pre-existing experience with DPDK,
+  at this or some later stage we may, with the benefit of more information, decide to use some other high-performance networking toolkit.
+\item 
+  Reimplement QUIC, without the QUIC crypto protocol, with DPDK.
+  This is interesting in its own right,
+  since the QUIC crypto protocol, in the words of the protocol authors, ``is destined to die'', i.e. it will be replaced by TLS 1.3.
+\item 
+  Modify the Google-provided toy client to test this version of QUIC.
+\item 
+  Add the QUIC crypto protocol to our implementation.
+\item 
+  Test our new implementation with the official Google version of the toy client, as well as Chromium.
+\item 
+  Benchmark our new implementation, and compare it to TCP+TLS+HTTP, TCP+TLS+SPDY, and TCP+TLS+HTTP2, as well as Google's toy server.
+  These comparison will be carried out across multiple networks, including Ethernet, WiFi, and cellular,
+  under simulated congestion or latency,
+  and under conditions of mobility between networks.
+\end{enumerate}
+
+\section{Deliverables}
+
+We will endeavor to produce a fully functional, production grade QUIC server implemented with DPDK or an equivalent high-performance networking toolkit.
+We also plan to compare the performance of our server to the available alternative web stacks, as described above.
+
+If we have additional time,
+further work might include:
+\begin{itemize}
+\item The integration of our implementation into nginx.
+\item An investigation of the behavior of Google's production servers, and a comparison of our server thereto.
+\end{itemize}
+\end{document}
