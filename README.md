@@ -44,3 +44,10 @@ Get the source
     
 ### build ``dpdk``
 Try the [quick start](http://dpdk.org/doc/quick-start) first. You need to be ``sudo`` when setting up hugetable.
+
+Compiling ``helloworld``
+     make T=x86_64-native-linuxapp-gcc
+     export RTE_SDK=$HOME/dpdk-2.2.0
+     export RTE_TARGET=x86_64-native-linuxapp-gcc
+
+Then setup hugepage either using what is in the quick-start or use the ``./tool/setup.sh``.
