@@ -1,5 +1,5 @@
 # cmuquic
-15744 Project: Quic server
+15744 Project: Evaluating and Improving Quic Performance.
 
 ### To Use [maufl/quic_toy](https://github.com/maufl/quic_toy)
 We need to go back to an older commit of ``libquic``. In its top level directory:
@@ -78,15 +78,6 @@ Add ``/usr/local/go/bin`` to the PATH environment variable to ``/etc/profile`` f
     export PATH=$PATH:/usr/local/go/bin
     source /etc/profil
 
-### build ``libquic``
-Get the source
-
-    git clone git@github.com:devsisters/libquic.git
-    cd libquic
-    mkdir build/
-    cd build/
-    cmake ..
-    make -j
     
 ### build ``dpdk``
 Try the [quick start](http://dpdk.org/doc/quick-start) first. You need to be ``sudo`` when setting up hugetable.
