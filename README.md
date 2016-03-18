@@ -39,7 +39,7 @@ Then build it:
 
     mkdir build/
     cd build/
-    cmake -GNinja..
+    cmake -GNinja ..
     ninja
     
 Lastly, come back to cmuquic and build it:
