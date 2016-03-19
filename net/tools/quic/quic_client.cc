@@ -91,17 +91,35 @@ QuicPacketWriter* QuicClient::DummyPacketWriterFactory::Create(
   return writer_;
 }
 
-
+/**
+ * We will use opendp UDP socket 
+ */
 bool QuicClient::CreateUDPSocket() {
+ 
+  /* Init runs only once for each process */
+  printf("---------------------HERE------------------------------\n");
+  int ret = netdpsock_init(NULL);
+  if (ret != 0) {
+    LOG(ERROR) << "netdpsock_init failed\n";
+    return false;
+  }
+
   int address_family = server_address_.GetSockAddrFamily();
-  fd_ = socket(address_family, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
+  fd_ = netdpsock_socket(address_family, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
   if (fd_ < 0) {
     LOG(ERROR) << "CreateSocket() failed: " << strerror(errno);
     return false;
   }
 
+  /* 
+   * From socket man page
+   *  "Indicates that an unsigned 32-bit value ancillary message (cmsg) should be
+   *  attached to received skbs indicating the number of packets dropped by the
+   *  socket between the last received packet and this received packet. "
+   * skbs -- socket buffers
+   */
   int get_overflow = 1;
-  int rc = setsockopt(fd_, SOL_SOCKET, SO_RXQ_OVFL, &get_overflow,
+  int rc = netdpsock_setsockopt(fd_, SOL_SOCKET, SO_RXQ_OVFL, &get_overflow,
                       sizeof(get_overflow));
   if (rc < 0) {
     DLOG(WARNING) << "Socket overflow detection not supported";
@@ -109,6 +127,7 @@ bool QuicClient::CreateUDPSocket() {
     overflow_supported_ = true;
   }
 
+  /* Set Send and Receive buffer size */
   if (!QuicSocketUtils::SetReceiveBufferSize(fd_,
                                              kDefaultSocketReceiveBuffer)) {
     return false;
@@ -118,6 +137,8 @@ bool QuicClient::CreateUDPSocket() {
     return false;
   }
 
+  /* This is saying we want the destination ip address info on the incoming UDP
+   * packet. After this is set, cmsghdr in msghdr will be populated */
   rc = QuicSocketUtils::SetGetAddressInfo(fd_, address_family);
   if (rc < 0) {
     LOG(ERROR) << "IP detection not supported" << strerror(errno);
@@ -138,7 +159,7 @@ bool QuicClient::CreateUDPSocket() {
   socklen_t raw_addr_len = sizeof(raw_addr);
   CHECK(client_address_.ToSockAddr(reinterpret_cast<sockaddr*>(&raw_addr),
                            &raw_addr_len));
-  rc = bind(fd_,
+  rc = netdpsock_bind(fd_,
             reinterpret_cast<const sockaddr*>(&raw_addr),
             sizeof(raw_addr));
   if (rc < 0) {
@@ -191,7 +212,7 @@ void QuicClient::Disconnect() {
 
   if (fd_ > -1) {
     epoll_server_->UnregisterFD(fd_);
-    close(fd_);
+    netdpsock_close(fd_);
     fd_ = -1;
   }
 
@@ -236,12 +257,19 @@ bool QuicClient::ReadAndProcessPacket() {
   char buf[2 * kMaxPacketSize];
 
   IPEndPoint server_address;
-  IPAddressNumber client_ip;
 
+  // TODO populate client_ip this way.
+  IPAddressNumber client_ip = client_address_.address();
+
+  int bytes_read = QuicSocketUtils::NetdpReadPacket(fd_, buf, arraysize(buf),
+                                                    &server_address);
+
+  /*
   int bytes_read = QuicSocketUtils::ReadPacket(
         fd_, buf, arraysize(buf),
         overflow_supported_ ? &packets_dropped_ : nullptr, &client_ip,
         &server_address);
+  */
 
   if (bytes_read < 0) {
     return false;
@@ -249,6 +277,7 @@ bool QuicClient::ReadAndProcessPacket() {
 
   QuicEncryptedPacket packet(buf, bytes_read, false);
 
+  // TODO why are we getting client ip from the incoming packet?
   IPEndPoint client_address(client_ip, client_address_.port());
   session_->connection()->ProcessUdpPacket(
       client_address, server_address, packet);

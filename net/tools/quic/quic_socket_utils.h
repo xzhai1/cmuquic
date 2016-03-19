@@ -17,6 +17,14 @@
 #include "net/quic/quic_types.h"
 #include "net/base/net_util.h"
 
+/*
+ * Need to include netdp header
+ */
+extern "C" {
+  #include "netdpsock_intf.h"
+  #include "netdp_errno.h"
+}
+
 namespace net {
 namespace tools {
 
@@ -42,6 +50,15 @@ class QuicSocketUtils {
   // Sets the receive buffer size to |size| and returns false if it fails.
   static bool SetReceiveBufferSize(int fd, size_t size);
 
+  /**
+   * 
+   * Use netdp socket to read packet. This is a lot less fancy 
+   */
+  static int NetdpReadPacket(int fd, 
+                             char *buffer, 
+                             size_t buf_len, 
+                             IPEndPoint *peer_address);
+
   // Reads buf_len from the socket.  If reading is successful, returns bytes
   // read and sets peer_address to the peer address.  Otherwise returns -1.
   //
@@ -57,6 +74,14 @@ class QuicSocketUtils {
                         QuicPacketCount* dropped_packets,
                         IPAddressNumber* self_address,
                         IPEndPoint* peer_address);
+
+  /**
+   * Use netdp socket to write packet.
+   */
+  static int NetdpWritePacket(int fd, 
+                              const char *buffer, 
+                              size_t buf_len, 
+                              const IPEndPoint& peer_address);
 
   // Writes buf_len to the socket. If writing is successful, sets the result's
   // status to WRITE_STATUS_OK and sets bytes_written.  Otherwise sets the

@@ -1,7 +1,24 @@
 CC=g++
 CFLAGS=--std=c++11 -fpermissive -c -g
-INC=-I . -I ../libquic/src -I ../libquic/src/third_party/protobuf/src
-LDFLAGS=-L ../libquic/build -l quic -L ../libquic/build/boringssl/ssl -l ssl -L ../libquic/build/boringssl/crypto -L ../libquic/build/protobuf -l protobuf -l crypto -l pthread
+INC=-I . \
+    -I ../libquic/src \
+    -I ../libquic/src/third_party/protobuf/src \
+    -I ./dpdk-odp/librte_netdp/include \
+    -I ./dpdk-odp/librte_netdpsock/include
+
+LDFLAGS=-L ../libquic/build -l quic \
+        -L ../libquic/build/boringssl/ssl -l ssl \
+        -L ../libquic/build/boringssl/crypto -l crypto \
+        -L ../libquic/build/protobuf -l protobuf \
+        -L ./dpdk-odp/librte_netdp -l rte_netdp \
+        -L ./dpdk-odp/librte_netdpsock -l rte_netdpsock \
+        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_mbuf \
+        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_eal \
+        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_mempool \
+        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_ring \
+        -l pthread \
+        -l dl
+
 SRCFILES=$(wildcard net/tools/quic/*.cc) $(wildcard net/tools/epoll_server/*.cc)
 OBJFILES=$(SRCFILES:.cc=.o)
 

@@ -21,7 +21,9 @@
 namespace net {
 namespace tools {
 
-// static
+/**
+ * Loops through cmsg linked list and find IPXX_PKTINFO
+ */
 IPAddressNumber QuicSocketUtils::GetAddressFromMsghdr(struct msghdr* hdr) {
   if (hdr->msg_controllen > 0) {
     for (cmsghdr* cmsg = CMSG_FIRSTHDR(hdr);
@@ -47,7 +49,9 @@ IPAddressNumber QuicSocketUtils::GetAddressFromMsghdr(struct msghdr* hdr) {
   return IPAddressNumber();
 }
 
-// static
+/**
+ * Loops through cmsg linked list and find the SO_RXQ_OVFL data
+ */
 bool QuicSocketUtils::GetOverflowFromMsghdr(struct msghdr* hdr,
                                             QuicPacketCount* dropped_packets) {
   if (hdr->msg_controllen > 0) {
@@ -64,42 +68,127 @@ bool QuicSocketUtils::GetOverflowFromMsghdr(struct msghdr* hdr,
   return false;
 }
 
-// static
+/**
+ * From man page:
+ *
+ * Pass an IP_PKTINFO ancillary message that contains a pktinfo
+ * structure that supplies some information about the incoming
+ * packet.  This only works for datagram oriented sockets.  The
+ * argument is a flag that tells the socket whether the
+ * IP_PKTINFO message should be passed or not.  The message
+ * itself can only be sent/retrieved as control message with a
+ * packet using recvmsg(2) or sendmsg(2).
+ *
+ *     struct in_pktinfo {
+ *         unsigned int   ipi_ifindex;  // Interface index
+ *         struct in_addr ipi_spec_dst; // Local address
+ *         struct in_addr ipi_addr;     // Header Destination
+ *                                         address
+ *     };
+ *
+ * ipi_ifindex is the unique index of the interface the packet
+ * was received on.  ipi_spec_dst is the local address of the
+ * packet and ipi_addr is the destination address in the packet
+ * header.  If IP_PKTINFO is passed to sendmsg(2) and
+ * ipi_spec_dst is not zero, then it is used as the local source
+ * address for the routing table lookup and for setting up IP
+ * source route options.  When ipi_ifindex is not zero, the
+ * primary local address of the interface specified by the index
+ * overwrites ipi_spec_dst for the routing table lookup. 
+ */
 int QuicSocketUtils::SetGetAddressInfo(int fd, int address_family) {
   int get_local_ip = 1;
-  int rc = setsockopt(fd, IPPROTO_IP, IP_PKTINFO,
+  int rc = netdpsock_setsockopt(fd, IPPROTO_IP, IP_PKTINFO,
                       &get_local_ip, sizeof(get_local_ip));
   if (rc == 0 && address_family == AF_INET6) {
-    rc = setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
+    rc = netdpsock_setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
                     &get_local_ip, sizeof(get_local_ip));
   }
   return rc;
 }
 
-// static
 bool QuicSocketUtils::SetSendBufferSize(int fd, size_t size) {
-  if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) != 0) {
+  if (netdpsock_setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) != 0) {
     LOG(ERROR) << "Failed to set socket send size";
     return false;
   }
   return true;
 }
 
-// static
 bool QuicSocketUtils::SetReceiveBufferSize(int fd, size_t size) {
-  if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) != 0) {
+  if (netdpsock_setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) != 0) {
     LOG(ERROR) << "Failed to set socket recv size";
     return false;
   }
   return true;
 }
 
-// static
+/** 
+ * Let's do a simple version without the msghdr and all 
+ */
+int
+QuicSocketUtils::NetdpReadPacket(int fd, char *buffer, size_t buf_len, 
+                                 IPEndPoint *peer_address) 
+{
+  DCHECK(peer_address != nullptr);
+  /* We don't know what is the IP protocol from the other side so let's use the
+   * generic version of sockaddr */
+  struct sockaddr_storage raw_address;
+  socklen_t addrlen = sizeof(sockaddr_storage);
+  
+  /* Actually read the packet */
+  size_t bytesread = netdpsock_recvfrom(fd, buffer, buf_len, 0,
+                                        reinterpret_cast<const sockaddr *>
+                                        (&raw_address), 
+                                        &addrlen);
+
+  if (bytesread < 0 && errno != 0) {
+    if (errno != EAGAIN) {
+      LOG(ERROR) << "Error reading " << strerror(errno);
+    }
+    return -1;
+  }
+
+  /* Populate the peer_address */
+  if (raw_address.ss_family == AF_INET) {
+    CHECK(peer_address->FromSockAddr(
+        reinterpret_cast<const sockaddr *>(&raw_address),
+        sizeof(struct sockaddr_in)));
+  } else if (raw_address.ss_family == AF_INET6) {
+    CHECK(peer_address->FromSockAddr(
+        reinterpret_cast<const sockaddr *>(&raw_address),
+        sizeof(struct sockaddr_in6)));
+  }
+
+  return bytesread;
+}
+
+/*
+ * From 
+ *  The Sockets Networking API: UNIX® Network Programming Volume 1, 
+ *  Third Edition
+ *  "A new generic socket address structure was defined as part of the IPv6 
+ *   sockets API, to overcome some of the shortcomings of the existing struct 
+ *   sockaddr. Unlike the struct sockaddr, the new struct sockaddr_storage is
+ *   large enough to hold any socket address type supported by the system. 
+ *   The sockaddr_storage structure is defined by including the <netinet/in.h> 
+ *   header...
+ *   
+ *   Note that the fields of the sockaddr_storage structure are opaque to the
+ *   user, except for ss_family and ss_len (if present). The sockaddr_storage
+ *   must be cast or copied to the appropriate socket address structure for the
+ *   address given in ss_family to access any other fields. "
+ */
 int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
                                 QuicPacketCount* dropped_packets,
                                 IPAddressNumber* self_address,
                                 IPEndPoint* peer_address) {
   DCHECK(peer_address != nullptr);
+  
+  /* Make room for control message. CMSG_SPACE is used to make appropriate
+   * amount of room for the cmsghdr struct. It also takes care of alignment. In
+   * this case, we are making room for both the overflow information and the
+   * destination info from the UDP packet */
   const int kSpaceForOverflowAndIp =
       CMSG_SPACE(sizeof(int)) + CMSG_SPACE(sizeof(in6_pktinfo));
   char cbuf[kSpaceForOverflowAndIp];
@@ -131,6 +220,7 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
     return -1;
   }
 
+  /* Tells you how many packets were dropped since we received last */
   if (dropped_packets != nullptr) {
     GetOverflowFromMsghdr(&hdr, dropped_packets);
   }
@@ -138,6 +228,7 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
     *self_address = QuicSocketUtils::GetAddressFromMsghdr(&hdr);
   }
 
+  /* Populate peer address */
   if (raw_address.ss_family == AF_INET) {
     CHECK(peer_address->FromSockAddr(
         reinterpret_cast<const sockaddr*>(&raw_address),
@@ -173,7 +264,30 @@ size_t QuicSocketUtils::SetIpInfoInCmsg(const IPAddressNumber& self_address,
   }
 }
 
-// static
+/*
+ */
+
+int
+QuicSocketUtils::NetdpWritePacket(int fd,
+                                  const char* buffer,
+                                  size_t buf_len,
+                                  const IPEndPoint& peer_address)
+{
+  /* Same drill here: allocate a generic sockaddr */
+  sockaddr_storage raw_address;
+  socklen_t address_len = sizeof(raw_address);
+  CHECK(peer_address.ToSockAddr(
+      reinterpret_cast<struct sockaddr*>(&raw_address),
+      &address_len));
+  ssize_t bytessent = netdpsock_sendto(fd, buffer, buf_len, 0,
+                                   reinterpret_cast<const sockaddr *>
+                                   (&raw_address),
+                                   address_len);
+
+  // TODO set errno
+  return 0;
+}
+
 WriteResult QuicSocketUtils::WritePacket(int fd,
                                          const char* buffer,
                                          size_t buf_len,
