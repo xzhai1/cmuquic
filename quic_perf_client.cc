@@ -66,6 +66,14 @@ int main(int argc, char *argv[]) {
        << "\ntotal size: " << FLAGS_total_transfer
        << "\nduration: " << FLAGS_duration << "\n";
 
+  /* (xingdaz) we have to initialize netdpsock first 
+     Init runs only once for each process */
+  int ret = netdpsock_init(NULL);
+  if (ret != 0) {
+    LOG(ERROR) << "netdpsock_init failed\n";
+    return 1;
+  }
+
   // Is needed for whatever reason
   base::AtExitManager exit_manager;
 
@@ -73,8 +81,8 @@ int main(int argc, char *argv[]) {
   sscanf(address.c_str(), "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
   printf("Connecting to %hhu.%hhu.%hhu.%hhu\n", a, b, c, d);
   net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char>{a, b, c, d};
-  net::IPEndPoint server_address(ip_address, 1337);
-  net::QuicServerId server_id(address, 1337, /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
+  net::IPEndPoint server_address(ip_address, 80);
+  net::QuicServerId server_id(address, 80, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
   net::EpollServer epoll_server;
   net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);
@@ -82,7 +90,7 @@ int main(int argc, char *argv[]) {
     cerr << "Could not initialize client" << endl;
     return 1;
   }
-  cout << "Successfully initialized client" << endl;
+
   if (!client.Connect()) {
     cout << "Client could not connect" << endl;
     return 1;

@@ -6,20 +6,23 @@ INC=-I . \
     -I ./dpdk-odp/librte_netdp/include \
     -I ./dpdk-odp/librte_netdpsock/include
 
+# should use ./dpdk-2.2.0/$(RTE_TARGET)/lib but somehow gdb doesn't pick up
+# the environmental variales
 LDFLAGS=-L ../libquic/build -l quic \
         -L ../libquic/build/boringssl/ssl -l ssl \
         -L ../libquic/build/boringssl/crypto -l crypto \
         -L ../libquic/build/protobuf -l protobuf \
         -L ./dpdk-odp/librte_netdp -l rte_netdp \
         -L ./dpdk-odp/librte_netdpsock -l rte_netdpsock \
-        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_mbuf \
-        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_eal \
-        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_mempool \
-        -L ./dpdk-2.2.0/$(RTE_TARGET)/lib -l rte_ring \
+        -L ./dpdk-2.2.0/x86_64-native-linuxapp-gcc/lib -l rte_mbuf \
+        -L ./dpdk-2.2.0/x86_64-native-linuxapp-gcc/lib -l rte_eal \
+        -L ./dpdk-2.2.0/x86_64-native-linuxapp-gcc/lib -l rte_mempool \
+        -L ./dpdk-2.2.0/x86_64-native-linuxapp-gcc/lib -l rte_ring \
         -l pthread \
         -l dl
 
 SRCFILES=$(wildcard net/tools/quic/*.cc) $(wildcard net/tools/epoll_server/*.cc)
+
 OBJFILES=$(SRCFILES:.cc=.o)
 
 all: quic_perf_client quic_perf_server tcp_perf_server tcp_perf_client

@@ -14,6 +14,11 @@
 #include "base/logging.h"
 #include "base/time/time.h"
 
+extern "C" {
+  #include "netdpsock_intf.h"
+  #include "netdp_errno.h"
+}
+
 // Design notes: An efficient implementation of ready list has the following
 // desirable properties:
 //
@@ -79,7 +84,9 @@ class ReadPipeCallback : public EpollCallbackInterface {
 ////////////////////////////////////////////////////////////////////////////////
 
 EpollServer::EpollServer()
-  : epoll_fd_(epoll_create(1024)),
+  /* TODO (xingdaz) swapped out for netdpsock_epoll methods */
+  /* : epoll_fd_(epoll_create(1024)), */
+  : epoll_fd_(netdpsock_epoll_create(1024)),
     timeout_in_us_(0),
     recorded_now_in_us_(0),
     ready_list_size_(0),
@@ -93,6 +100,9 @@ EpollServer::EpollServer()
   LIST_INIT(&ready_list_);
   LIST_INIT(&tmp_list_);
 
+  /* TODO (xingdaz) this is a problem. The pipe is only used in wake
+     and it is not getting called by anyone */
+  /*
   int pipe_fds[2];
   if (pipe(pipe_fds) < 0) {
     // Unfortunately, it is impossible to test any such initialization in
@@ -107,6 +117,7 @@ EpollServer::EpollServer()
   read_fd_ = pipe_fds[0];
   write_fd_ = pipe_fds[1];
   RegisterFD(read_fd_, wake_cb_.get(), EPOLLIN);
+  */
 }
 
 void EpollServer::CleanupFDToCBMap() {
@@ -191,7 +202,9 @@ void EpollServer::RegisterFD(int fd, CB* cb, int event_mask) {
   CHECK(cb);
   VLOG(3) << "RegisterFD fd=" << fd << " event_mask=" << event_mask;
   FDToCBMap::iterator fd_i = cb_map_.find(CBAndEventMask(NULL, 0, fd));
-  if (cb_map_.end() != fd_i) {
+  if (cb_map_.end() != fd_i) { /* (xingdaz)duplicate registration */
+    LOG(INFO) << "----RegisterFD case: duplicate reg-------\n";
+    DLOG(INFO) << "First case\n";
     // do we just abort, or do we just unregister the other guy?
     // for now, lets just unregister the other guy.
 
@@ -214,17 +227,21 @@ void EpollServer::RegisterFD(int fd, CB* cb, int event_mask) {
     cb_map_.insert(CBAndEventMask(cb, event_mask, fd));
   }
 
-
+  /* (xingdaz) No need to all this. netdp sockets are non blocking
   // set the FD to be non-blocking.
   SetNonblocking(fd);
+  */
 
   cb->OnRegistration(this, fd, event_mask);
 }
 
+/* (xingdaz) Cannot use this method. netdp sockets aren't created by kernel. */
 int EpollServer::GetFlags(int fd) {
   return fcntl(fd, F_GETFL, 0);
 }
 
+/* (xingdaz) Cannot use this method. netdp sockets aren't created by kernel. 
+   In addition, netdp sockets are non blocking by default. */
 void EpollServer::SetNonblocking(int fd) {
   int flags = GetFlags(fd);
   if (flags == -1) {
@@ -252,7 +269,9 @@ int EpollServer::epoll_wait_impl(int epfd,
                                  struct epoll_event* events,
                                  int max_events,
                                  int timeout_in_ms) {
-  return epoll_wait(epfd, events, max_events, timeout_in_ms);
+  /* TODO (xingdaz) need to use netdp stack epoll */
+  /* return epoll_wait(epfd, events, max_events, timeout_in_ms); */
+  return netdpsock_epoll_wait(epfd, events, max_events, timeout_in_ms);
 }
 
 void EpollServer::RegisterFDForWrite(int fd, CB* cb) {
@@ -325,6 +344,7 @@ void EpollServer::HandleEvent(int fd, int event_mask) {
 #ifdef EPOLL_SERVER_EVENT_TRACING
   event_recorder_.RecordEpollEvent(fd, event_mask);
 #endif
+  /* (xingdaz) go look for the event in the map */
   FDToCBMap::iterator fd_i = cb_map_.find(CBAndEventMask(NULL, 0, fd));
   if (fd_i == cb_map_.end() || fd_i->cb == NULL) {
     // Ignore the event.
@@ -558,7 +578,9 @@ void EpollServer::DelFD(int fd) const {
 #ifdef EPOLL_SERVER_EVENT_TRACING
   event_recorder_.RecordFDMaskEvent(fd, 0, "DelFD");
 #endif
-  if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &ee)) {
+  /* TODO (xingdaz) use netdp syscall */
+  /* if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &ee)) { */
+  if (netdpsock_epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &ee)) {
     int saved_errno = errno;
     char buf[kErrorBufferSize];
     LOG(FATAL) << "Epoll set removal error for fd " << fd << ": "
@@ -571,12 +593,15 @@ void EpollServer::DelFD(int fd) const {
 void EpollServer::AddFD(int fd, int event_mask) const {
   struct epoll_event ee;
   memset(&ee, 0, sizeof(ee));
+  /* (xingdaz) tag along error and hangup event */
   ee.events = event_mask | EPOLLERR | EPOLLHUP;
   ee.data.fd = fd;
 #ifdef EPOLL_SERVER_EVENT_TRACING
   event_recorder_.RecordFDMaskEvent(fd, ee.events, "AddFD");
 #endif
-  if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &ee)) {
+  /* TODO (xingdaz) swapped out for netdpsock_epoll methods */
+  /* if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &ee)) { */
+  if (netdpsock_epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &ee)) {
     int saved_errno = errno;
     char buf[kErrorBufferSize];
     LOG(FATAL) << "Epoll set insertion error for fd " << fd << ": "
@@ -596,7 +621,9 @@ void EpollServer::ModFD(int fd, int event_mask) const {
 #endif
   VLOG(3) <<  "modifying fd= " << fd << " "
           << EventMaskToString(ee.events);
-  if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &ee)) {
+  /* TODO (xingdaz) use netdp stack */
+  /* if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &ee)) { */
+  if (netdpsock_epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &ee)) {
     int saved_errno = errno;
     char buf[kErrorBufferSize];
     LOG(FATAL) << "Epoll set modification error for fd " << fd << ": "
@@ -648,6 +675,8 @@ void EpollServer::WaitForEventsAndCallHandleEvents(int64 timeout_in_us,
     }
   }
   const int timeout_in_ms = timeout_in_us / 1000;
+  /* TODO (xingdaz) epoll_wait_impl is just a wrapper for the real thing such
+   * that they can stub out the real function with dummy one in testing */
   int nfds = epoll_wait_impl(epoll_fd_,
                              events,
                              events_size,

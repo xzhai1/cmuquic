@@ -32,6 +32,11 @@ using std::vector;
 namespace net {
 namespace tools {
 
+/**
+ * EPOLLIN  -- Data other than high-priority data can be read
+ * EPOLLOUT -- Normal data can be written
+ * EPOLLET  -- Employ edge-triggered event notification
+ */
 const int kEpollFlags = EPOLLIN | EPOLLOUT | EPOLLET;
 
 QuicClient::QuicClient(IPEndPoint server_address,
@@ -74,7 +79,8 @@ bool QuicClient::Initialize() {
   if (!CreateUDPSocket()) {
     return false;
   }
-  LOG(INFO) << "-------------------Done Creating UDP Socket-----------------\n";
+  /* (xingdaz) QuicClient have empty implementation on the
+   * EpollCallbackInterface */
   epoll_server_->RegisterFD(fd_, this, kEpollFlags);
   initialized_ = true;
   return true;
@@ -91,21 +97,10 @@ QuicPacketWriter* QuicClient::DummyPacketWriterFactory::Create(
   return writer_;
 }
 
-/**
- * We will use opendp UDP socket 
- */
 bool QuicClient::CreateUDPSocket() {
- 
-  /* Init runs only once for each process */
-  int ret = netdpsock_init(NULL);
-  if (ret != 0) {
-    LOG(ERROR) << "netdpsock_init failed\n";
-    return false;
-  }
-
   int address_family = server_address_.GetSockAddrFamily();
-  //fd_ = netdpsock_socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
-  /* netdpsocket is already non blocking? */
+
+  /* create a file descriptor first */
   fd_ = netdpsock_socket(address_family, SOCK_DGRAM, IPPROTO_UDP);
   if (fd_ < 0) {
     LOG(ERROR) << "CreateSocket() failed: " << strerror(errno);
@@ -159,31 +154,32 @@ bool QuicClient::CreateUDPSocket() {
   sockaddr_storage raw_addr;
   socklen_t raw_addr_len = sizeof(raw_addr);
   CHECK(client_address_.ToSockAddr(reinterpret_cast<sockaddr*>(&raw_addr),
-                           &raw_addr_len));
-  rc = netdpsock_bind(fd_,
-            reinterpret_cast<const sockaddr*>(&raw_addr),
-            sizeof(raw_addr));
+                                   &raw_addr_len));
+
+  rc = netdpsock_bind(fd_, (SA *)(&raw_addr), raw_addr_len);
   if (rc < 0) {
     LOG(ERROR) << "Bind failed: " << strerror(errno);
     return false;
   }
 
-  SockaddrStorage storage;
-  /* int netdpsock_getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen); */
-  sockaddr_storage ss;
-  socklen_t        len;
+  /* TODO (xingdaz) getsockname doesn't work. This test doesn't server any
+   * purpose any way */
+#if 0
+  DLOG(INFO) << "len = " << len << "\n";
 
-  if (netdpsock_getsockname(fd_, (sockaddr *) &ss, &len) != 0 ||
-      !client_address_.FromSockAddr(reinterpret_cast<sockaddr *>(&ss), len)) {
+  if (netdpsock_getsockname(fd_, (SA *)(&sock_store), &len) != 0 ||
+      !client_address_.FromSockAddr((SA *)(&sock_store), len)) {
     LOG(ERROR) << "Unable to get self address.  Error: " << strerror(errno);
   }
+#endif
 
-#if 0
+  /* (xingdaz) Can't use because fd_ is not created by kernel */
+  /*
   if (getsockname(fd_, storage.addr, &storage.addr_len) != 0 ||
       !client_address_.FromSockAddr(storage.addr, storage.addr_len)) {
     LOG(ERROR) << "Unable to get self address.  Error: " << strerror(errno);
   }
-#endif
+  */
 
   return true;
 }
@@ -205,10 +201,9 @@ bool QuicClient::Connect() {
   if (writer_.get() != writer) {
     writer_.reset(writer);
   }
-  LOG(INFO) << "---------------BEFORE SESSION INIT---------------------\n";
+
   session_->InitializeSession(server_id_, &crypto_config_);
   session_->CryptoConnect();
-  LOG(INFO) << "--------------------AFTER---------------------\n";
 
   while (!session_->IsEncryptionEstablished() &&
          session_->connection()->connected()) {

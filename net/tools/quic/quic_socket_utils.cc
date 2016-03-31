@@ -300,6 +300,10 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
       &address_len));
   iovec iov = {const_cast<char*>(buffer), buf_len};
 
+  /* TODO (xingdaz) can't use sendmsg function because there isn't the
+   * equivalent of that in netdp stack. */
+
+  /*
   msghdr hdr;
   hdr.msg_name = &raw_address;
   hdr.msg_namelen = address_len;
@@ -323,8 +327,12 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
     SetIpInfoInCmsg(self_address, cmsg);
     hdr.msg_controllen = cmsg->cmsg_len;
   }
-
   int rc = sendmsg(fd, &hdr, 0);
+  */
+
+  ssize_t rc = netdpsock_sendto(fd, buffer, buf_len, 0,
+                                (sockaddr *) &raw_address, address_len);
+
   if (rc >= 0) {
     return WriteResult(WRITE_STATUS_OK, rc);
   }

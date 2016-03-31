@@ -115,6 +115,7 @@ class QuicClient : public EpollCallbackInterface,
   QuicCryptoClientConfig crypto_config_;
 
   // Address of the client if the client is connected to the server.
+  /* (xingdaz) TODO replace client_address_ */
   IPEndPoint client_address_;
 
   // If initialized, the address to bind to.
