@@ -17,10 +17,20 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 
+  /* (xingdaz) we have to initialize netdpsock first
+     Init runs only once for each process */
+  int ret = netdpsock_init(NULL);
+  if (ret != 0) {
+    LOG(ERROR) << "netdpsock_init failed\n";
+    return 1;
+  }
+
   // Is needed for whatever reason
   base::AtExitManager exit_manager;
 
-  net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
+  /* 127.0.0.1 */
+  net::IPAddressNumber ip_address = 
+    (net::IPAddressNumber) std::vector<unsigned char> {0, 0, 0, 0};
   net::IPEndPoint listen_address(ip_address, 1337);
   net::QuicConfig config;
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();

@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-// #define EPOLL_SERVER_EVENT_TRACING 1
+//#define EPOLL_SERVER_EVENT_TRACING 1
 //
 // Defining EPOLL_SERVER_EVENT_TRACING
 // causes code to exist which didn't before.

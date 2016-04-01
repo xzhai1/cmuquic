@@ -72,7 +72,7 @@ QuicServer::~QuicServer() {
 bool QuicServer::Listen(const IPEndPoint& address) {
   port_ = address.port();
   int address_family = address.GetSockAddrFamily();
-  fd_ = socket(address_family, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
+  fd_ = netdpsock_socket(address_family, SOCK_DGRAM, IPPROTO_UDP);
   if (fd_ < 0) {
     LOG(ERROR) << "CreateSocket() failed: " << strerror(errno);
     return false;
@@ -88,7 +88,7 @@ bool QuicServer::Listen(const IPEndPoint& address) {
   }
 
   int get_overflow = 1;
-  rc = setsockopt(
+  rc = netdpsock_setsockopt(
       fd_, SOL_SOCKET, SO_RXQ_OVFL, &get_overflow, sizeof(get_overflow));
 
   if (rc < 0) {
@@ -113,7 +113,7 @@ bool QuicServer::Listen(const IPEndPoint& address) {
   socklen_t raw_addr_len = sizeof(raw_addr);
   CHECK(address.ToSockAddr(reinterpret_cast<sockaddr*>(&raw_addr),
                            &raw_addr_len));
-  rc = bind(fd_,
+  rc = netdpsock_bind(fd_,
             reinterpret_cast<const sockaddr*>(&raw_addr),
             sizeof(raw_addr));
   if (rc < 0) {

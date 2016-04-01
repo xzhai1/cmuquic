@@ -156,7 +156,7 @@ bool QuicClient::CreateUDPSocket() {
   CHECK(client_address_.ToSockAddr(reinterpret_cast<sockaddr*>(&raw_addr),
                                    &raw_addr_len));
 
-  rc = netdpsock_bind(fd_, (SA *)(&raw_addr), raw_addr_len);
+  rc = netdpsock_bind(fd_, (sockaddr *)(&raw_addr), raw_addr_len);
   if (rc < 0) {
     LOG(ERROR) << "Bind failed: " << strerror(errno);
     return false;
@@ -269,15 +269,10 @@ bool QuicClient::ReadAndProcessPacket() {
   // TODO populate client_ip this way.
   IPAddressNumber client_ip = client_address_.address();
 
-  int bytes_read = QuicSocketUtils::NetdpReadPacket(fd_, buf, arraysize(buf),
-                                                    &server_address);
-
-  /*
   int bytes_read = QuicSocketUtils::ReadPacket(
         fd_, buf, arraysize(buf),
         overflow_supported_ ? &packets_dropped_ : nullptr, &client_ip,
         &server_address);
-  */
 
   if (bytes_read < 0) {
     return false;

@@ -123,46 +123,6 @@ bool QuicSocketUtils::SetReceiveBufferSize(int fd, size_t size) {
   return true;
 }
 
-/** 
- * Let's do a simple version without the msghdr and all 
- */
-int
-QuicSocketUtils::NetdpReadPacket(int fd, char *buffer, size_t buf_len, 
-                                 IPEndPoint *peer_address) 
-{
-  DCHECK(peer_address != nullptr);
-  /* We don't know what is the IP protocol from the other side so let's use the
-   * generic version of sockaddr */
-  struct sockaddr_storage raw_address;
-  socklen_t addrlen = sizeof(sockaddr_storage);
-  
-  /* Actually read the packet */
-  size_t bytesread = netdpsock_recvfrom(fd, buffer, buf_len, 0,
-                                        reinterpret_cast<const sockaddr *>
-                                        (&raw_address), 
-                                        &addrlen);
-
-  if (bytesread < 0 && errno != 0) {
-    if (errno != EAGAIN) {
-      LOG(ERROR) << "Error reading " << strerror(errno);
-    }
-    return -1;
-  }
-
-  /* Populate the peer_address */
-  if (raw_address.ss_family == AF_INET) {
-    CHECK(peer_address->FromSockAddr(
-        reinterpret_cast<const sockaddr *>(&raw_address),
-        sizeof(struct sockaddr_in)));
-  } else if (raw_address.ss_family == AF_INET6) {
-    CHECK(peer_address->FromSockAddr(
-        reinterpret_cast<const sockaddr *>(&raw_address),
-        sizeof(struct sockaddr_in6)));
-  }
-
-  return bytesread;
-}
-
 /*
  * From 
  *  The Sockets Networking API: UNIX® Network Programming Volume 1, 
@@ -184,7 +144,9 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
                                 IPAddressNumber* self_address,
                                 IPEndPoint* peer_address) {
   DCHECK(peer_address != nullptr);
-  
+ 
+  /* (xingdaz) can't use all the jazz below netdpsock */
+#if 0
   /* Make room for control message. CMSG_SPACE is used to make appropriate
    * amount of room for the cmsghdr struct. It also takes care of alignment. In
    * this case, we are making room for both the overflow information and the
@@ -210,7 +172,13 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
   hdr.msg_controllen = arraysize(cbuf);
 
   int bytes_read = recvmsg(fd, &hdr, 0);
+#endif
 
+  struct sockaddr_storage raw_address;
+  socklen_t address_len = sizeof(raw_address);
+  int bytes_read = netdpsock_recvfrom(fd, buffer, buf_len, 0, 
+                                      (sockaddr *) &raw_address, &address_len);
+  
   // Return before setting dropped packets: if we get EAGAIN, it will
   // be 0.
   if (bytes_read < 0 && errno != 0) {
@@ -220,6 +188,8 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
     return -1;
   }
 
+  /* TODO (xingdaz) might be a prob here */
+#if 0
   /* Tells you how many packets were dropped since we received last */
   if (dropped_packets != nullptr) {
     GetOverflowFromMsghdr(&hdr, dropped_packets);
@@ -227,6 +197,7 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
   if (self_address != nullptr) {
     *self_address = QuicSocketUtils::GetAddressFromMsghdr(&hdr);
   }
+#endif
 
   /* Populate peer address */
   if (raw_address.ss_family == AF_INET) {
@@ -264,30 +235,6 @@ size_t QuicSocketUtils::SetIpInfoInCmsg(const IPAddressNumber& self_address,
   }
 }
 
-/*
- */
-
-int
-QuicSocketUtils::NetdpWritePacket(int fd,
-                                  const char* buffer,
-                                  size_t buf_len,
-                                  const IPEndPoint& peer_address)
-{
-  /* Same drill here: allocate a generic sockaddr */
-  sockaddr_storage raw_address;
-  socklen_t address_len = sizeof(raw_address);
-  CHECK(peer_address.ToSockAddr(
-      reinterpret_cast<struct sockaddr*>(&raw_address),
-      &address_len));
-  ssize_t bytessent = netdpsock_sendto(fd, buffer, buf_len, 0,
-                                   reinterpret_cast<const sockaddr *>
-                                   (&raw_address),
-                                   address_len);
-
-  // TODO set errno
-  return 0;
-}
-
 WriteResult QuicSocketUtils::WritePacket(int fd,
                                          const char* buffer,
                                          size_t buf_len,
@@ -298,12 +245,12 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
   CHECK(peer_address.ToSockAddr(
       reinterpret_cast<struct sockaddr*>(&raw_address),
       &address_len));
-  iovec iov = {const_cast<char*>(buffer), buf_len};
-
   /* TODO (xingdaz) can't use sendmsg function because there isn't the
    * equivalent of that in netdp stack. */
 
   /*
+  iovec iov = {const_cast<char*>(buffer), buf_len};
+
   msghdr hdr;
   hdr.msg_name = &raw_address;
   hdr.msg_namelen = address_len;
