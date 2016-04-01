@@ -181,9 +181,15 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
   
   // Return before setting dropped packets: if we get EAGAIN, it will
   // be 0.
+  /* TODO (xingdaz) just for fun */
   if (bytes_read < 0 && errno != 0) {
-    if (errno != EAGAIN) {
+    if (errno != NETDP_EAGAIN) {
+      LOG(ERROR) << "Bytes read " << bytes_read;
+      LOG(ERROR) << "errno " << errno;
       LOG(ERROR) << "Error reading " << strerror(errno);
+    } else {
+      /* (xingdaz) Quic is checking for EAGAIN so need to reset */
+      errno = EAGAIN;
     }
     return -1;
   }
@@ -283,7 +289,8 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
   if (rc >= 0) {
     return WriteResult(WRITE_STATUS_OK, rc);
   }
-  return WriteResult((errno == EAGAIN || errno == EWOULDBLOCK) ?
+  //return WriteResult((errno == EAGAIN || errno == EWOULDBLOCK) ?
+  return WriteResult((errno == NETDP_EAGAIN || errno == NETDP_EWOULDBLOCK) ?
       WRITE_STATUS_BLOCKED : WRITE_STATUS_ERROR, errno);
 }
 

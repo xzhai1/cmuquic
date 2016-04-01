@@ -14,11 +14,6 @@
 #include "base/logging.h"
 #include "base/time/time.h"
 
-extern "C" {
-  #include "netdpsock_intf.h"
-  #include "netdp_errno.h"
-}
-
 // Design notes: An efficient implementation of ready list has the following
 // desirable properties:
 //

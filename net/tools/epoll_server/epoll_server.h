@@ -38,6 +38,11 @@
 #include "base/memory/scoped_ptr.h"
 #include <sys/epoll.h>
 
+extern "C" {
+    #include "netdpsock_intf.h"
+      #include "netdp_errno.h"
+}
+
 namespace net {
 
 class EpollServer;
