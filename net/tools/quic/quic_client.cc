@@ -145,6 +145,7 @@ bool QuicClient::CreateUDPSocket() {
     client_address_ = IPEndPoint(bind_to_address_, local_port_);
   } else if (address_family == AF_INET) {
     IPAddressNumber any4 = (IPAddressNumber) std::vector<unsigned char>{0,0,0,0};
+    //IPAddressNumber any4 = (IPAddressNumber) std::vector<unsigned char>{192,168,122,45};
     client_address_ = IPEndPoint(any4, local_port_);
   } else {
     IPAddressNumber any6 = (IPAddressNumber) std::vector<unsigned char>{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -207,6 +208,7 @@ bool QuicClient::Connect() {
 
   while (!session_->IsEncryptionEstablished() &&
          session_->connection()->connected()) {
+    // TODO this is problematic
     epoll_server_->WaitForEventsAndExecuteCallbacks();
   }
   return session_->connection()->connected();

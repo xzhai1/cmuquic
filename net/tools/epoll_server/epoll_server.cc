@@ -11,8 +11,12 @@
 #include <utility>
 #include <vector>
 
+#include <netinet/in.h>
+
 #include "base/logging.h"
 #include "base/time/time.h"
+
+#include "net/base/ip_endpoint.h"
 
 // Design notes: An efficient implementation of ready list has the following
 // desirable properties:
@@ -66,7 +70,9 @@ class ReadPipeCallback : public EpollCallbackInterface {
     int data_read = 1;
     // Read until the pipe is empty.
     while (data_read > 0) {
-      data_read = read(fd, &data, sizeof(data));
+      /* (xingdaz) need to read netdp socket */
+      //data_read = read(fd, &data, sizeof(data));
+      data_read = netdpsock_read(fd, &data, sizeof(data));
     }
   }
   void OnShutdown(EpollServer* eps, int fd) override {}
@@ -97,6 +103,45 @@ EpollServer::EpollServer()
 
   /* TODO (xingdaz) this is a problem. The pipe is only used in wake
      and it is not getting called by anyone */
+  /* TODO create a pair of sockets in netdp space */
+  int saved_errno;
+  if ( (read_fd_ = netdpsock_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+    saved_errno = errno;
+    LOG(FATAL) << "Error creating read_fd_ " << strerror(saved_errno); 
+  }
+  if ( (write_fd_ = netdpsock_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+    saved_errno = errno;
+    LOG(FATAL) << "Error creating write_fd_ " << strerror(saved_errno); 
+  }
+  /* read_fd_ should be binded to the port */
+  int rc;
+  sockaddr_storage read_addr;
+  sockaddr_storage write_addr;
+  socklen_t read_addr_len = sizeof(sockaddr_storage);
+  socklen_t write_addr_len = sizeof(sockaddr_storage);
+
+  /* make the read address */
+  IPAddressNumber read_ip = 
+    (IPAddressNumber) std::vector<unsigned char>{192, 168, 122, 45};
+  IPEndPoint read_address = IPEndPoint(read_ip, 777);
+  CHECK(read_address.ToSockAddr((sockaddr *) &read_addr, &read_addr_len));
+  rc = netdpsock_bind(read_fd_, (sockaddr *) &read_addr, read_addr_len);
+  if (rc < 0) {
+    LOG(FATAL) << "Error binding read_fd_ " << strerror(errno); 
+  }
+
+  /* make the write address */
+  IPAddressNumber write_ip = 
+    (IPAddressNumber) std::vector<unsigned char>{0, 0, 0, 0};
+  IPEndPoint write_address = IPEndPoint(write_ip, 0);
+  CHECK(write_address.ToSockAddr((sockaddr *) &write_addr, &write_addr_len));
+  rc = netdpsock_bind(write_fd_, (sockaddr *) &write_addr, write_addr_len);
+  if (rc < 0) {
+    LOG(FATAL) << "Error binding write_fd_ " << strerror(errno); 
+  }
+
+  RegisterFD(read_fd_, wake_cb_.get(), EPOLLIN);
+
   /*
   int pipe_fds[2];
   if (pipe(pipe_fds) < 0) {
@@ -503,7 +548,17 @@ int EpollServer::NumFDsRegistered() const {
 
 void EpollServer::Wake() {
   char data = 'd';  // 'd' is for data.  It's good enough for me.
-  int rv = write(write_fd_, &data, 1);
+  /* TODO can't just write. need to send over the network */
+  //int rv = write(write_fd_, &data, 1);
+
+  sockaddr_storage dst_addr;
+  socklen_t dst_addr_len = sizeof(sockaddr_storage);
+  IPAddressNumber dst_ip = 
+    (IPAddressNumber) std::vector<unsigned char>{192, 168, 122, 45};
+  IPEndPoint dst_address = IPEndPoint(dst_ip, 777);
+  CHECK(dst_address.ToSockAddr((sockaddr *) &dst_addr, &dst_addr_len));
+  int rv = netdpsock_sendto(write_fd_, &data, 1, 0, 
+                            (sockaddr *) &dst_addr, dst_addr_len);
   DCHECK_EQ(rv, 1);
 }
 
@@ -706,6 +761,7 @@ void EpollServer::WaitForEventsAndCallHandleEvents(int64 timeout_in_us,
     }
   }
 
+  /* (xingdaz) ready fds are added to the ready list first before they are handled */
   // Now run through the ready list.
   if (ready_list_.lh_first) {
     CallReadyListCallbacks();
