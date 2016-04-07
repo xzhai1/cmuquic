@@ -134,7 +134,7 @@ Come back to cmuquic and build it:
 ### DPDK
 When developing and debugging, you will need to start ``DPDK``. We like to use ``./tools/setup.sh`` in the ``dpdk`` directory to start it up. You will need to bring down your ``eth0``:
 
-    ifdown eth0
+    sudo ifconfig eth0 down
 
 Then start up the setup script:
 
