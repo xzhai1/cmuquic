@@ -4,6 +4,9 @@
 #include <sstream>
 #include <time.h>
 
+#include <unistd.h>
+#include <stdlib.h>
+
 #include "net/base/ip_endpoint.h"
 #include "net/tools/quic/quic_client.h"
 
@@ -34,6 +37,44 @@ string randomString(uint length) {
 }
 
 int main(int argc, char *argv[]) {
+
+  int opt;
+  char *ip_str;
+  int port_number = -1; 
+
+  while ((opt = getopt(argc, argv, ":p:")) != -1) {
+    switch (opt) {
+    case 'p': 
+      port_number = atoi(optarg);
+      break;
+    case ':':
+      printf("Missing argument\n");
+      return 1;
+    case '?':
+      printf("Unrecognized option\n");
+      return 1;
+    default:
+      printf("Usage: ./quic_perf_server -p port_number\n");
+      return 1;
+    }   
+  }
+
+  /* can't have empty arg */
+  if (port_number == -1) {
+      printf("Usage: ./quic_perf_client -p port_number ip_address\n");
+      return 1;
+  }
+
+  /* ip address needs to be supplied */
+  if (optind == argc) {
+      printf("You need to supply an ip address!\n");
+      printf("Usage: ./quic_perf_client -p port_number ip_address\n");
+      return 1;
+  }
+
+  ip_str = argv[optind];
+
+# if 0
   base::CommandLine::Init(argc, argv);
   base::CommandLine* line = base::CommandLine::ForCurrentProcess();
   const base::CommandLine::StringVector& args = line->GetArgs();
@@ -61,7 +102,8 @@ int main(int argc, char *argv[]) {
       return 1;
     }
   }
-
+#endif
+  
   cout << "Run parameters are:\nchunk size: " << FLAGS_chunk_size
        << "\ntotal size: " << FLAGS_total_transfer
        << "\nduration: " << FLAGS_duration << "\n";
@@ -78,11 +120,14 @@ int main(int argc, char *argv[]) {
   base::AtExitManager exit_manager;
 
   unsigned char a, b, c, d;
-  sscanf(address.c_str(), "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
+  //sscanf(address.c_str(), "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
+  sscanf(ip_str, "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
   printf("Connecting to %hhu.%hhu.%hhu.%hhu\n", a, b, c, d);
+  printf("port number specified at %d\n", port_number);
   net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char>{a, b, c, d};
   net::IPEndPoint server_address(ip_address, 1337);
-  net::QuicServerId server_id(address, 1337, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
+  //net::QuicServerId server_id(address, 1337, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
+  net::QuicServerId server_id(ip_str, 1337, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
   net::EpollServer epoll_server;
   net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);

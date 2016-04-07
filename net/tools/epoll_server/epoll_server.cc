@@ -6,7 +6,7 @@
 
 #include <unistd.h>  // For read, pipe, close and write.
 #include <stdlib.h>  // for abort
-#include <errno.h>    // for errno and strerror_r
+#include <errno.h>   // for errno and strerror_r
 #include <algorithm>
 #include <utility>
 #include <vector>
@@ -70,9 +70,10 @@ class ReadPipeCallback : public EpollCallbackInterface {
     int data_read = 1;
     // Read until the pipe is empty.
     while (data_read > 0) {
-      /* (xingdaz) need to read netdp socket */
-      //data_read = read(fd, &data, sizeof(data));
-      data_read = netdpsock_read(fd, &data, sizeof(data));
+      /* TODO (xingdaz) need to read netdp socket 
+       * basically it reads one byte at a time till the pipe is drained */
+      data_read = read(fd, &data, sizeof(data));
+      //data_read = netdpsock_read(fd, &data, sizeof(data));
     }
   }
   void OnShutdown(EpollServer* eps, int fd) override {}
@@ -103,7 +104,7 @@ EpollServer::EpollServer()
 
   /* TODO (xingdaz) this is a problem. The pipe is only used in wake
      and it is not getting called by anyone */
-  /* TODO create a pair of sockets in netdp space */
+#if 0
   int saved_errno;
   if ( (read_fd_ = netdpsock_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
     saved_errno = errno;
@@ -113,6 +114,7 @@ EpollServer::EpollServer()
     saved_errno = errno;
     LOG(FATAL) << "Error creating write_fd_ " << strerror(saved_errno); 
   }
+
   /* read_fd_ should be binded to the port */
   int rc;
   sockaddr_storage read_addr;
@@ -141,6 +143,7 @@ EpollServer::EpollServer()
   }
 
   RegisterFD(read_fd_, wake_cb_.get(), EPOLLIN);
+#endif
 
   /*
   int pipe_fds[2];
@@ -208,9 +211,10 @@ EpollServer::~EpollServer() {
 
   CleanupTimeToAlarmCBMap();
 
-  close(read_fd_);
-  close(write_fd_);
-  close(epoll_fd_);
+  /* TODO (xingdaz) need to use netdpsock_close */
+  netdpsock_close(read_fd_);
+  netdpsock_close(write_fd_);
+  netdpsock_close(epoll_fd_);
 }
 
 // Whether a CBAandEventMask is on the ready list is determined by a non-NULL
@@ -549,8 +553,8 @@ int EpollServer::NumFDsRegistered() const {
 void EpollServer::Wake() {
   char data = 'd';  // 'd' is for data.  It's good enough for me.
   /* TODO can't just write. need to send over the network */
-  //int rv = write(write_fd_, &data, 1);
-
+  int rv = write(write_fd_, &data, 1);
+#if 0
   sockaddr_storage dst_addr;
   socklen_t dst_addr_len = sizeof(sockaddr_storage);
   IPAddressNumber dst_ip = 
@@ -559,6 +563,7 @@ void EpollServer::Wake() {
   CHECK(dst_address.ToSockAddr((sockaddr *) &dst_addr, &dst_addr_len));
   int rv = netdpsock_sendto(write_fd_, &data, 1, 0, 
                             (sockaddr *) &dst_addr, dst_addr_len);
+#endif
   DCHECK_EQ(rv, 1);
 }
 
@@ -753,7 +758,7 @@ void EpollServer::WaitForEventsAndCallHandleEvents(int64 timeout_in_us,
     }
   } else if (nfds < 0) {
     // Catch interrupted syscall and just ignore it and move on.
-    if (errno != EINTR && errno != 0) {
+    if (errno != NETDP_EINTR && errno != 0) {
       int saved_errno = errno;
       char buf[kErrorBufferSize];
       LOG(FATAL) << "Error " << saved_errno << " in epoll_wait: "

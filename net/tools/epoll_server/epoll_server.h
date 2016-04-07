@@ -40,7 +40,7 @@
 
 extern "C" {
     #include "netdpsock_intf.h"
-      #include "netdp_errno.h"
+    #include "netdp_errno.h"
 }
 
 namespace net {
@@ -776,7 +776,7 @@ class EpollServer {
       MaybeRecordAndClear();
     }
 
-    friend ostream& operator<<(ostream& os, const EventRecorder& er) {
+    friend std::ostream& operator<<(std::ostream& os, const EventRecorder& er) {
       for (int i = 0; i < er.unregistered_fds_.size(); ++i) {
         os << "fd: " << er.unregistered_fds_[i] << "\n";
         os << er.unregistered_fds_[i];
@@ -805,11 +805,11 @@ class EpollServer {
    protected:
     class DebugOutput {
      public:
-      friend ostream& operator<<(ostream& os, const DebugOutput& debug_output) {
+      friend std::ostream& operator<<(std::ostream& os, const DebugOutput& debug_output) {
         debug_output.OutputToStream(os);
         return os;
       }
-      virtual void OutputToStream(ostream* os) const = 0;
+      virtual void OutputToStream(std::ostream* os) const = 0;
       virtual ~DebugOutput() {}
     };
 
@@ -817,7 +817,7 @@ class EpollServer {
      public:
       FDMaskOutput(int fd, int mask, const char* function) :
           fd_(fd), mask_(mask), function_(function) {}
-      virtual void OutputToStream(ostream* os) const {
+      virtual void OutputToStream(std::ostream* os) const {
         (*os) << "func: " << function_
               << "\tfd: " << fd_;
         if (mask_ != 0) {
@@ -835,7 +835,7 @@ class EpollServer {
                       int num_events_generated) :
           timeout_in_ms_(timeout_in_ms),
           num_events_generated_(num_events_generated) {}
-      virtual void OutputToStream(ostream* os) const {
+      virtual void OutputToStream(std::ostream* os) const {
         (*os) << "timeout_in_ms: " << timeout_in_ms_
               << "\tnum_events_generated: " << num_events_generated_;
       }
@@ -874,7 +874,7 @@ class EpollServer {
         if (event_mask & EPOLLET) ++epoll_et;
       };
 
-      friend ostream& operator<<(ostream& os, const Events& ev) {
+      friend std::ostream& operator<<(std::ostream& os, const Events& ev) {
         if (ev.epoll_in) {
           os << "\t      EPOLLIN: " << ev.epoll_in << "\n";
         }
@@ -939,7 +939,7 @@ class EpollServer {
   void ClearEventRecords() {
     event_recorder_.Clear();
   }
-  void WriteEventRecords(ostream* os) const {
+  void WriteEventRecords(std::ostream* os) const {
     (*os) << event_recorder_;
   }
 

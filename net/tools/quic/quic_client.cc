@@ -163,16 +163,17 @@ bool QuicClient::CreateUDPSocket() {
     return false;
   }
 
-  /* TODO (xingdaz) getsockname doesn't work. This test doesn't server any
-   * purpose any way */
-#if 0
-  DLOG(INFO) << "len = " << len << "\n";
-
-  if (netdpsock_getsockname(fd_, (SA *)(&sock_store), &len) != 0 ||
-      !client_address_.FromSockAddr((SA *)(&sock_store), len)) {
-    LOG(ERROR) << "Unable to get self address.  Error: " << strerror(errno);
+  /* TODO (xingdaz) getsockname doesn't work in that it gives the wrong
+   * sin_family = 528. So for now this is a hack: we will ignore IPv6 and just use
+   * sockaddr_in and reset client_address_
+   */
+  sockaddr_in xxx_addr;
+  socklen_t xxx_addr_len = sizeof(sockaddr_in);
+  IPAddressNumber xxx_any4 = (IPAddressNumber) std::vector<unsigned char>{0,0,0,0};
+  if (netdpsock_getsockname(fd_, (sockaddr *) (&xxx_addr), &xxx_addr_len) != 0){
+    LOG(ERROR) << "Can't get socket name  Error: " << strerror(errno);
   }
-#endif
+  client_address_ = IPEndPoint(xxx_any4, xxx_addr.sin_port);
 
   /* (xingdaz) Can't use because fd_ is not created by kernel */
   /*
@@ -204,11 +205,12 @@ bool QuicClient::Connect() {
   }
 
   session_->InitializeSession(server_id_, &crypto_config_);
+  // TODO this is problematic
   session_->CryptoConnect();
+  LOG(INFO) << "DONE CYRPTO";
 
   while (!session_->IsEncryptionEstablished() &&
          session_->connection()->connected()) {
-    // TODO this is problematic
     epoll_server_->WaitForEventsAndExecuteCallbacks();
   }
   return session_->connection()->connected();
@@ -283,7 +285,10 @@ bool QuicClient::ReadAndProcessPacket() {
   QuicEncryptedPacket packet(buf, bytes_read, false);
 
   // TODO why are we getting client ip from the incoming packet?
-  IPEndPoint client_address(client_ip, client_address_.port());
+  /* may be a problem */
+  IPAddressNumber hack_addr  = (IPAddressNumber) std::vector<unsigned char>{192,168,122,45};
+  IPEndPoint client_address(hack_addr, client_address_.port());
+  //IPEndPoint client_address(client_ip, client_address_.port());
   session_->connection()->ProcessUdpPacket(
       client_address, server_address, packet);
   return true;

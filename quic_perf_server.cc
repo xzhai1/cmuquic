@@ -1,6 +1,10 @@
 // Small demo that reads form stdin and sents over a quic connection
 
 #include <iostream>
+#include <cstdio>
+
+#include <unistd.h>
+#include <stdlib.h>
 
 #include "net/base/ip_endpoint.h"
 #include "net/tools/quic/quic_server.h"
@@ -17,21 +21,40 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 
-  /* (xingdaz) we have to initialize netdpsock first
-     Init runs only once for each process */
-  int ret = netdpsock_init(NULL);
-  if (ret != 0) {
-    LOG(ERROR) << "netdpsock_init failed\n";
-    return 1;
+  int opt;
+  int port_number = -1;
+
+  while ((opt = getopt(argc, argv, ":p:")) != -1) {
+    switch (opt) {
+    case 'p': 
+      port_number = atoi(optarg);
+      break;
+    case ':':
+      printf("Missing argument\n");
+      return 1;
+    case '?':
+      printf("Unrecognized option\n");
+      return 1;
+    default:
+      printf("Usage: ./quic_perf_server -p port_number\n");
+      return 1;
+    }
   }
+  /* can't have empty arg */
+  if (port_number == -1) {
+      printf("Usage: ./quic_perf_server -p port_number\n");
+      return 1;
+  }
+
+  printf("port number specified at %d\n", port_number);
 
   // Is needed for whatever reason
   base::AtExitManager exit_manager;
 
-  /* 127.0.0.1 */
-  net::IPAddressNumber ip_address = 
-    (net::IPAddressNumber) std::vector<unsigned char> {0, 0, 0, 0};
-  net::IPEndPoint listen_address(ip_address, 1337);
+  //net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
+  net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned
+  char> { 192, 168, 122, 82 };
+  net::IPEndPoint listen_address(ip_address, port_number);
   net::QuicConfig config;
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
   net::EpollServer epoll_server;

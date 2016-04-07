@@ -66,6 +66,7 @@ class QuicClient : public EpollCallbackInterface,
   void Disconnect();
 
   // From EpollCallbackInterface
+  /* (xingda) the only API from the interface implemented is OnEvent */
   void OnRegistration(EpollServer* eps, int fd, int event_mask) override {}
   void OnModification(int fd, int event_mask) override {}
   void OnEvent(int fd, EpollEvent* event) override;

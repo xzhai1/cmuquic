@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <string>
+#include <cstdio> 
 
 #include "base/basictypes.h"
 #include "base/logging.h"
@@ -115,6 +116,11 @@ bool QuicSocketUtils::SetSendBufferSize(int fd, size_t size) {
   return true;
 }
 
+/* (xingdaz) display received buffer content */
+static void display_buffer(size_t bytes_read, char *buffer) {
+  printf("%.*s\n", bytes_read, buffer);
+}
+
 bool QuicSocketUtils::SetReceiveBufferSize(int fd, size_t size) {
   if (netdpsock_setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) != 0) {
     LOG(ERROR) << "Failed to set socket recv size";
@@ -179,13 +185,14 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
   int bytes_read = netdpsock_recvfrom(fd, buffer, buf_len, 0, 
                                       (sockaddr *) &raw_address, &address_len);
   
+  LOG(INFO) << "bytes_read " << bytes_read << " errno " << errno;
+  //display_buffer(bytes_read, buffer);
+
   // Return before setting dropped packets: if we get EAGAIN, it will
   // be 0.
   /* TODO (xingdaz) just for fun */
   if (bytes_read < 0 && errno != 0) {
     if (errno != NETDP_EAGAIN) {
-      LOG(ERROR) << "Bytes read " << bytes_read;
-      LOG(ERROR) << "errno " << errno;
       LOG(ERROR) << "Error reading " << strerror(errno);
     } else {
       /* (xingdaz) Quic is checking for EAGAIN so need to reset */
@@ -285,6 +292,8 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
 
   ssize_t rc = netdpsock_sendto(fd, buffer, buf_len, 0,
                                 (sockaddr *) &raw_address, address_len);
+
+  LOG(INFO) << "bytes_sent " << rc;
 
   if (rc >= 0) {
     return WriteResult(WRITE_STATUS_OK, rc);
