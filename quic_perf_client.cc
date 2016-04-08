@@ -125,9 +125,9 @@ int main(int argc, char *argv[]) {
   printf("Connecting to %hhu.%hhu.%hhu.%hhu\n", a, b, c, d);
   printf("port number specified at %d\n", port_number);
   net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char>{a, b, c, d};
-  net::IPEndPoint server_address(ip_address, 1337);
+  net::IPEndPoint server_address(ip_address, port_number);
   //net::QuicServerId server_id(address, 1337, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
-  net::QuicServerId server_id(ip_str, 1337, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
+  net::QuicServerId server_id(ip_str, port_number, /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
   net::EpollServer epoll_server;
   net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);

@@ -286,7 +286,8 @@ bool QuicClient::ReadAndProcessPacket() {
 
   // TODO why are we getting client ip from the incoming packet?
   /* may be a problem */
-  IPAddressNumber hack_addr  = (IPAddressNumber) std::vector<unsigned char>{192,168,122,45};
+  IPAddressNumber hack_addr = 
+      (IPAddressNumber) std::vector<unsigned char>{192,168,122,100};
   IPEndPoint client_address(hack_addr, client_address_.port());
   //IPEndPoint client_address(client_ip, client_address_.port());
   session_->connection()->ProcessUdpPacket(
