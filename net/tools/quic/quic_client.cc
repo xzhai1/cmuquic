@@ -32,7 +32,7 @@ using std::vector;
 namespace net {
 namespace tools {
 
-/**
+/*
  * EPOLLIN  -- Data other than high-priority data can be read
  * EPOLLOUT -- Normal data can be written
  * EPOLLET  -- Employ edge-triggered event notification
@@ -79,8 +79,6 @@ bool QuicClient::Initialize() {
   if (!CreateUDPSocket()) {
     return false;
   }
-  /* (xingdaz) QuicClient have empty implementation on the
-   * EpollCallbackInterface */
   epoll_server_->RegisterFD(fd_, this, kEpollFlags);
   initialized_ = true;
   return true;
@@ -100,20 +98,14 @@ QuicPacketWriter* QuicClient::DummyPacketWriterFactory::Create(
 bool QuicClient::CreateUDPSocket() {
   int address_family = server_address_.GetSockAddrFamily();
 
-  /* create a file descriptor first */
   fd_ = netdpsock_socket(address_family, SOCK_DGRAM, IPPROTO_UDP);
   if (fd_ < 0) {
     LOG(ERROR) << "CreateSocket() failed: " << strerror(errno);
     return false;
   }
 
-  /* 
-   * From socket man page
-   *  "Indicates that an unsigned 32-bit value ancillary message (cmsg) should be
-   *  attached to received skbs indicating the number of packets dropped by the
-   *  socket between the last received packet and this received packet. "
-   * skbs -- socket buffers
-   */
+  /* (xingda) Even though we are setting the SO_RXQ_OVFL option here we aren't
+   * able to use it netdp socket. */
   int get_overflow = 1;
   int rc = netdpsock_setsockopt(fd_, SOL_SOCKET, SO_RXQ_OVFL, &get_overflow,
                       sizeof(get_overflow));
@@ -133,8 +125,8 @@ bool QuicClient::CreateUDPSocket() {
     return false;
   }
 
-  /* This is saying we want the destination ip address info on the incoming UDP
-   * packet. After this is set, cmsghdr in msghdr will be populated */
+  /* (xingdaz) This is saying we want the destination ip address info on the 
+   * incoming UDP packet. It works in linux socket but not on netdp ones. */
   rc = QuicSocketUtils::SetGetAddressInfo(fd_, address_family);
   if (rc < 0) {
     LOG(ERROR) << "IP detection not supported" << strerror(errno);
@@ -142,13 +134,16 @@ bool QuicClient::CreateUDPSocket() {
   }
 
   if (bind_to_address_.size() != 0) {
+    /* (xingdaz) this is never the case */
     client_address_ = IPEndPoint(bind_to_address_, local_port_);
   } else if (address_family == AF_INET) {
-    IPAddressNumber any4 = (IPAddressNumber) std::vector<unsigned char>{0,0,0,0};
-    //IPAddressNumber any4 = (IPAddressNumber) std::vector<unsigned char>{192,168,122,45};
+    IPAddressNumber any4 = 
+      (IPAddressNumber) std::vector<unsigned char>{0,0,0,0};
     client_address_ = IPEndPoint(any4, local_port_);
   } else {
-    IPAddressNumber any6 = (IPAddressNumber) std::vector<unsigned char>{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    IPAddressNumber any6 = 
+      (IPAddressNumber) std::vector<unsigned char>
+      {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     client_address_ = IPEndPoint(any6, local_port_);
   }
 
@@ -156,32 +151,24 @@ bool QuicClient::CreateUDPSocket() {
   socklen_t raw_addr_len = sizeof(raw_addr);
   CHECK(client_address_.ToSockAddr(reinterpret_cast<sockaddr*>(&raw_addr),
                                    &raw_addr_len));
-
   rc = netdpsock_bind(fd_, (sockaddr *)(&raw_addr), raw_addr_len);
   if (rc < 0) {
     LOG(ERROR) << "Bind failed: " << strerror(errno);
     return false;
   }
 
-  /* TODO (xingdaz) getsockname doesn't work in that it gives the wrong
-   * sin_family = 528. So for now this is a hack: we will ignore IPv6 and just use
-   * sockaddr_in and reset client_address_
-   */
-  sockaddr_in xxx_addr;
-  socklen_t xxx_addr_len = sizeof(sockaddr_in);
-  IPAddressNumber xxx_any4 = (IPAddressNumber) std::vector<unsigned char>{0,0,0,0};
-  if (netdpsock_getsockname(fd_, (sockaddr *) (&xxx_addr), &xxx_addr_len) != 0){
+  /* (TODO) (xingdaz) netdpsock_getsockname may have a bug in that it gives 
+   * the wrong sin_family = 528. So to get the netdp assigned ephemeral port, 
+   * we need to assume for IPv4 and ignore IPv6 and just use sockaddr_in and 
+   * reset client_address_ */
+  sockaddr_in eph_addr;
+  socklen_t eph_addr_len = sizeof(sockaddr_in);
+  IPAddressNumber eph_any4 = 
+    (IPAddressNumber) std::vector<unsigned char>{0,0,0,0};
+  if (netdpsock_getsockname(fd_, (sockaddr *) (&eph_addr), &eph_addr_len) != 0){
     LOG(ERROR) << "Can't get socket name  Error: " << strerror(errno);
   }
-  client_address_ = IPEndPoint(xxx_any4, xxx_addr.sin_port);
-
-  /* (xingdaz) Can't use because fd_ is not created by kernel */
-  /*
-  if (getsockname(fd_, storage.addr, &storage.addr_len) != 0 ||
-      !client_address_.FromSockAddr(storage.addr, storage.addr_len)) {
-    LOG(ERROR) << "Unable to get self address.  Error: " << strerror(errno);
-  }
-  */
+  client_address_ = IPEndPoint(eph_any4, eph_addr.sin_port);
 
   return true;
 }
@@ -195,7 +182,8 @@ bool QuicClient::Connect() {
       new QuicConnection((QuicConnectionId) QuicRandom::GetInstance()->RandUint64(),
                          server_address_, helper_.get(),
                          factory,
-                         /* owns_writer= */ false, /* is_server */ Perspective::IS_CLIENT,
+                         /* owns_writer= */ false,
+                         /* is_server */ Perspective::IS_CLIENT,
                          server_id_.is_https(), supported_versions_)));
 
   // Reset |writer_| after |session_| so that the old writer outlives the old
@@ -205,9 +193,7 @@ bool QuicClient::Connect() {
   }
 
   session_->InitializeSession(server_id_, &crypto_config_);
-  // TODO this is problematic
   session_->CryptoConnect();
-  LOG(INFO) << "DONE CYRPTO";
 
   while (!session_->IsEncryptionEstablished() &&
          session_->connection()->connected()) {
@@ -270,7 +256,6 @@ bool QuicClient::ReadAndProcessPacket() {
 
   IPEndPoint server_address;
 
-  // TODO populate client_ip this way.
   IPAddressNumber client_ip = client_address_.address();
 
   int bytes_read = QuicSocketUtils::ReadPacket(
@@ -284,12 +269,7 @@ bool QuicClient::ReadAndProcessPacket() {
 
   QuicEncryptedPacket packet(buf, bytes_read, false);
 
-  // TODO why are we getting client ip from the incoming packet?
-  /* may be a problem */
-  IPAddressNumber hack_addr = 
-      (IPAddressNumber) std::vector<unsigned char>{192,168,122,100};
-  IPEndPoint client_address(hack_addr, client_address_.port());
-  //IPEndPoint client_address(client_ip, client_address_.port());
+  IPEndPoint client_address(client_ip, client_address_.port());
   session_->connection()->ProcessUdpPacket(
       client_address, server_address, packet);
   return true;

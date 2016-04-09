@@ -1,29 +1,38 @@
-// Small demo that reads form stdin and sents over a quic connection
+/* 
+ *
+ *
+ *
+ */
 
-#include <iostream>
-#include <sstream>
+/* C includes */
 #include <time.h>
-
 #include <unistd.h>
 #include <stdlib.h>
+#include <ctype.h>
 
-#include "net/base/ip_endpoint.h"
+/* This is the quic client & server implementation from google that we have
+ * modified with netdp socket */
 #include "net/tools/quic/quic_client.h"
 
+/* These are helper includes */
 #include "base/at_exit.h"
-#include "base/command_line.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+/* These are the helper includes related to networking in general */
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
+/* These are the quic protocol related header files */
 #include "net/quic/quic_protocol.h"
 #include "net/quic/quic_server_id.h"
 #include "net/quic/quic_utils.h"
 
+#define printable(ch) (isprint((unsigned char) ch) ? ch : '#')
+
 using namespace std;
 
+/* TODO legacy bullshit. Will remove soon */
 uint64 FLAGS_total_transfer = 10 * 1000 * 1000;
 uint64 FLAGS_chunk_size = 1000;
 uint64 FLAGS_duration = 0;
@@ -36,11 +45,28 @@ string randomString(uint length) {
   return result;
 }
 
+
+/**
+ * @brief usageError This is lifted out of Michael Kerrisk's TLPI book.
+ *
+ * @param progName  argv[0]
+ * @param msg       error message
+ * @param opt       returned option value
+ */
+static void
+usageError(char *progName, char *msg, int opt)
+{
+    if (msg != NULL && opt != 0)
+        fprintf(stderr, "%s (-%c)\n", msg, printable(opt));
+    fprintf(stderr, "Usage: %s [-p port_number]\n", progName);
+    exit(EXIT_FAILURE);
+}
+
 int main(int argc, char *argv[]) {
 
-  int opt;
-  char *ip_str;
-  int port_number = -1; 
+  int   opt;
+  char  *ip_str;
+  int   port_number = -1; 
 
   while ((opt = getopt(argc, argv, ":p:")) != -1) {
     switch (opt) {
@@ -48,103 +74,79 @@ int main(int argc, char *argv[]) {
       port_number = atoi(optarg);
       break;
     case ':':
-      printf("Missing argument\n");
+      usageError(argv[0], "Missing argument", optopt);
       return 1;
     case '?':
-      printf("Unrecognized option\n");
+      usageError(argv[0], "Unrecognized option", optopt);
       return 1;
     default:
-      printf("Usage: ./quic_perf_server -p port_number\n");
+      usageError(argv[0], NULL, optopt);
       return 1;
     }   
   }
 
-  /* can't have empty arg */
+  /* We can't have empty options */
   if (port_number == -1) {
-      printf("Usage: ./quic_perf_client -p port_number ip_address\n");
+      usageError(argv[0], NULL, optopt);
       return 1;
   }
 
-  /* ip address needs to be supplied */
+  /* And server ip address needs to be supplied */
   if (optind == argc) {
-      printf("You need to supply an ip address!\n");
-      printf("Usage: ./quic_perf_client -p port_number ip_address\n");
+      fprintf(stderr, "You need to supply an ip address!\n");
+      usageError(argv[0], NULL, optopt);
       return 1;
   }
 
+  /* The first nonoption argument has to be ip address */
+  /* TODO validate ip address */
   ip_str = argv[optind];
 
-# if 0
-  base::CommandLine::Init(argc, argv);
-  base::CommandLine* line = base::CommandLine::ForCurrentProcess();
-  const base::CommandLine::StringVector& args = line->GetArgs();
-  if (args.size() == 0) {
-    cout << "No address to connect to was provided.\n";
-    return 1;
-  }
-  std::string address = args[0];
-
-  if (line->HasSwitch("t")) {
-    if (!base::StringToUint64(line->GetSwitchValueASCII("t"), &FLAGS_total_transfer)) {
-      cout << "-t must be an unsigned integer\n";
-      return 1;
-    }
-  }
-  if (line->HasSwitch("c")) {
-    if (!base::StringToUint64(line->GetSwitchValueASCII("c"), &FLAGS_chunk_size)) {
-      cout << "-c must be an unsigned integer\n";
-      return 1;
-    }
-  }
-  if (line->HasSwitch("d")) {
-    if (!base::StringToUint64(line->GetSwitchValueASCII("d"), &FLAGS_duration)) {
-      cout << "-d must be an unsigned integer\n";
-      return 1;
-    }
-  }
-#endif
-  
-  cout << "Run parameters are:\nchunk size: " << FLAGS_chunk_size
-       << "\ntotal size: " << FLAGS_total_transfer
-       << "\nduration: " << FLAGS_duration << "\n";
-
-  /* (xingdaz) we have to initialize netdpsock first 
+  /* We have to initialize netdpsock first. 
      Init runs only once for each process */
-  int ret = netdpsock_init(NULL);
-  if (ret != 0) {
+  if (netdpsock_init(NULL) != 0) {
     LOG(ERROR) << "netdpsock_init failed\n";
     return 1;
   }
 
-  // Is needed for whatever reason
+  LOG(INFO) << "Connecting to " << ip_str << ":" << port_number;
+
+  /* This is required. Otherwise, this error will be thrown:
+   * [0408/210628:FATAL:at_exit.cc(53)] Check failed: false. 
+   * Tried to RegisterCallback without an AtExitManager */
   base::AtExitManager exit_manager;
 
   unsigned char a, b, c, d;
-  //sscanf(address.c_str(), "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
   sscanf(ip_str, "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
-  printf("Connecting to %hhu.%hhu.%hhu.%hhu\n", a, b, c, d);
-  printf("port number specified at %d\n", port_number);
-  net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char>{a, b, c, d};
+
+  net::IPAddressNumber ip_address =
+    (net::IPAddressNumber) std::vector<unsigned char>{a, b, c, d};
   net::IPEndPoint server_address(ip_address, port_number);
-  //net::QuicServerId server_id(address, 1337, /*is_http*/ true, net::PRIVACY_MODE_DISABLED);
-  net::QuicServerId server_id(ip_str, port_number, /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
+  net::QuicServerId server_id(ip_str, port_number, 
+                              /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
   net::EpollServer epoll_server;
-  net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);
+  net::tools::QuicClient client(server_address, server_id, 
+                                supported_versions, &epoll_server);
+
   if (!client.Initialize()) {
-    cerr << "Could not initialize client" << endl;
+    LOG(ERROR) << "Could not initialize client";
     return 1;
   }
   if (!client.Connect()) {
-    // TODO problem here
-    cout << "Client could not connect" << endl;
+    LOG(ERROR) << "Client could not connect";
     return 1;
   }
-  cout << "Successfully connected to server, hopefully" << endl;
+
+  /* A stream is a "bi-directional flow of bytes across a logical channel
+   * within a QUIC connection". In other words, we can have multiple streams 
+   * in the same QUIC pipe. */
+  /* TODO for now we will keep this crap */
   net::tools::QuicClientStream* stream = client.CreateClientStream();
   if (FLAGS_duration == 0) {
     for (uint64 i = 0; i < FLAGS_total_transfer; i += FLAGS_chunk_size) {
-      stream->WriteStringPiece(base::StringPiece(randomString(FLAGS_chunk_size)), false);
+      stream->WriteStringPiece(
+          base::StringPiece(randomString(FLAGS_chunk_size)), false);
       if (stream->HasBufferedData()) {
         client.WaitForEvents();
       }
@@ -156,7 +158,8 @@ int main(int argc, char *argv[]) {
     
   } else {
     for (time_t dest = time(NULL) + FLAGS_duration; time(NULL) < dest; ) {
-      stream->WriteStringPiece(base::StringPiece(randomString(FLAGS_chunk_size)), false);
+      stream->WriteStringPiece(
+          base::StringPiece(randomString(FLAGS_chunk_size)), false);
       if (stream->HasBufferedData()) {
         client.WaitForEvents();
       }

@@ -38,6 +38,7 @@
 #include "base/memory/scoped_ptr.h"
 #include <sys/epoll.h>
 
+/* These are netdp socket headers */
 extern "C" {
     #include "netdpsock_intf.h"
     #include "netdp_errno.h"

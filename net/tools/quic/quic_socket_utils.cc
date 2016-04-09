@@ -22,6 +22,7 @@
 namespace net {
 namespace tools {
 
+/* (xingdaz) This is not used as netdp has no recvmsg API */
 /**
  * Loops through cmsg linked list and find IPXX_PKTINFO
  */
@@ -50,6 +51,7 @@ IPAddressNumber QuicSocketUtils::GetAddressFromMsghdr(struct msghdr* hdr) {
   return IPAddressNumber();
 }
 
+/* (xingdaz) This is not used as netdp has no recvmsg API */
 /**
  * Loops through cmsg linked list and find the SO_RXQ_OVFL data
  */
@@ -116,11 +118,6 @@ bool QuicSocketUtils::SetSendBufferSize(int fd, size_t size) {
   return true;
 }
 
-/* (xingdaz) display received buffer content */
-static void display_buffer(size_t bytes_read, char *buffer) {
-  printf("%.*s\n", bytes_read, buffer);
-}
-
 bool QuicSocketUtils::SetReceiveBufferSize(int fd, size_t size) {
   if (netdpsock_setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) != 0) {
     LOG(ERROR) << "Failed to set socket recv size";
@@ -129,29 +126,13 @@ bool QuicSocketUtils::SetReceiveBufferSize(int fd, size_t size) {
   return true;
 }
 
-/*
- * From 
- *  The Sockets Networking API: UNIX® Network Programming Volume 1, 
- *  Third Edition
- *  "A new generic socket address structure was defined as part of the IPv6 
- *   sockets API, to overcome some of the shortcomings of the existing struct 
- *   sockaddr. Unlike the struct sockaddr, the new struct sockaddr_storage is
- *   large enough to hold any socket address type supported by the system. 
- *   The sockaddr_storage structure is defined by including the <netinet/in.h> 
- *   header...
- *   
- *   Note that the fields of the sockaddr_storage structure are opaque to the
- *   user, except for ss_family and ss_len (if present). The sockaddr_storage
- *   must be cast or copied to the appropriate socket address structure for the
- *   address given in ss_family to access any other fields. "
- */
 int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
                                 QuicPacketCount* dropped_packets,
                                 IPAddressNumber* self_address,
                                 IPEndPoint* peer_address) {
   DCHECK(peer_address != nullptr);
  
-  /* (xingdaz) can't use all the jazz below netdpsock */
+  /* (xingdaz) can't use all the jazz below */
 #if 0
   /* Make room for control message. CMSG_SPACE is used to make appropriate
    * amount of room for the cmsghdr struct. It also takes care of alignment. In
@@ -185,23 +166,20 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
   int bytes_read = netdpsock_recvfrom(fd, buffer, buf_len, 0, 
                                       (sockaddr *) &raw_address, &address_len);
   
-  LOG(INFO) << "bytes_read " << bytes_read << " errno " << errno;
-  //display_buffer(bytes_read, buffer);
-
   // Return before setting dropped packets: if we get EAGAIN, it will
   // be 0.
-  /* TODO (xingdaz) just for fun */
+  /* (xingdaz) We have to catch netdp's error and translate it back normal error
+   * so that the calling function can interpret it. */
   if (bytes_read < 0 && errno != 0) {
     if (errno != NETDP_EAGAIN) {
       LOG(ERROR) << "Error reading " << strerror(errno);
     } else {
-      /* (xingdaz) Quic is checking for EAGAIN so need to reset */
       errno = EAGAIN;
     }
     return -1;
   }
 
-  /* TODO (xingdaz) might be a prob here */
+  /* (xingdaz) might be a prob. netdp can't tell me about dropped packet */
 #if 0
   /* Tells you how many packets were dropped since we received last */
   if (dropped_packets != nullptr) {
@@ -226,6 +204,7 @@ int QuicSocketUtils::ReadPacket(int fd, char* buffer, size_t buf_len,
   return bytes_read;
 }
 
+/* (xingdaz) Not used */
 size_t QuicSocketUtils::SetIpInfoInCmsg(const IPAddressNumber& self_address,
                                         cmsghdr* cmsg) {
   if (GetAddressFamily(self_address) == ADDRESS_FAMILY_IPV4) {
@@ -256,12 +235,11 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
   sockaddr_storage raw_address;
   socklen_t address_len = sizeof(raw_address);
   CHECK(peer_address.ToSockAddr(
-      reinterpret_cast<struct sockaddr*>(&raw_address),
-      &address_len));
-  /* TODO (xingdaz) can't use sendmsg function because there isn't the
+        reinterpret_cast<struct sockaddr*>(&raw_address),
+        &address_len));
+  /* (xingdaz) can't use sendmsg function because there isn't the
    * equivalent of that in netdp stack. */
-
-  /*
+#if 0
   iovec iov = {const_cast<char*>(buffer), buf_len};
 
   msghdr hdr;
@@ -288,23 +266,22 @@ WriteResult QuicSocketUtils::WritePacket(int fd,
     hdr.msg_controllen = cmsg->cmsg_len;
   }
   int rc = sendmsg(fd, &hdr, 0);
-  */
+#endif
 
   ssize_t rc = netdpsock_sendto(fd, buffer, buf_len, 0,
                                 (sockaddr *) &raw_address, address_len);
 
-  LOG(INFO) << "bytes_sent " << rc;
-
+  /* (xingdaz) Again, we have to catch netdp error and translate it back */
   if (rc >= 0) {
     return WriteResult(WRITE_STATUS_OK, rc);
   }
-  //return WriteResult((errno == EAGAIN || errno == EWOULDBLOCK) ?
   return WriteResult((errno == NETDP_EAGAIN || errno == NETDP_EWOULDBLOCK) ?
       WRITE_STATUS_BLOCKED : WRITE_STATUS_ERROR, errno);
 }
 
 }  // namespace tools
 
+/* (xingdaz) not used */
 SockaddrStorage::SockaddrStorage(const SockaddrStorage& other)
     : addr_len(other.addr_len),
       addr(reinterpret_cast<struct sockaddr*>(&addr_storage)) {

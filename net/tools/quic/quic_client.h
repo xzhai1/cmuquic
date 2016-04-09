@@ -22,9 +22,7 @@
 #include "net/tools/epoll_server/epoll_server.h"
 #include "net/tools/quic/quic_client_session.h"
 
-/*
- * Need to include netdp header
- */
+/* Need to include netdp header */
 extern "C" {
   #include "netdpsock_intf.h"
   #include "netdp_errno.h"

@@ -17,9 +17,7 @@
 #include "net/quic/quic_types.h"
 #include "net/base/net_util.h"
 
-/*
- * Need to include netdp header
- */
+/* Include netdp socket headers */
 extern "C" {
   #include "netdpsock_intf.h"
   #include "netdp_errno.h"
