@@ -46,6 +46,13 @@ int main(int argc, char *argv[]) {
       return 1;
   }
 
+  /* We have to initialize netdpsock first.
+     Init runs only once for each process */
+  if (netdpsock_init(NULL) != 0) {
+    LOG(ERROR) << "netdpsock_init failed\n";
+    return 1;
+  }
+
   printf("port number specified at %d\n", port_number);
 
   // Is needed for whatever reason
@@ -57,10 +64,9 @@ int main(int argc, char *argv[]) {
   net::IPEndPoint listen_address(ip_address, port_number);
   net::QuicConfig config;
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
-  net::EpollServer epoll_server;
+  //net::EpollServer epoll_server;
 
   net::tools::QuicServer server(config, supported_versions);
-
 
   // Start listening on the specified address.
   if (!server.Listen(listen_address)) {
