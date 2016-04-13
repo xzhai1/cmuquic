@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=--std=c++11 -fpermissive -c -g
+CFLAGS=--std=c++11 -fpermissive -c -g -pg
 INC=-I . \
     -I ../libquic/src \
     -I ../libquic/src/third_party/protobuf/src \
@@ -19,7 +19,8 @@ LDFLAGS=-L ../libquic/build -l quic \
         -L ./dpdk-2.2.0/x86_64-native-linuxapp-gcc/lib -l rte_mempool \
         -L ./dpdk-2.2.0/x86_64-native-linuxapp-gcc/lib -l rte_ring \
         -l pthread \
-        -l dl
+        -l dl \
+        -pg
 
 SRCFILES=$(wildcard net/tools/quic/*.cc) $(wildcard net/tools/epoll_server/*.cc)
 
