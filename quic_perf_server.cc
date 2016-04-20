@@ -35,10 +35,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // server listens and responds until killed
+  // (or until it calls exit somewhere inside WaitForEvents)
   while (1) {
     server.WaitForEvents();
   }
-
-  cout.flush();
-
 }

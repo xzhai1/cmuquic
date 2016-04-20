@@ -18,7 +18,23 @@ namespace net {
     uint32 QuicServerStream::ProcessRawData(const char* data, uint32 data_len) {
       bytes_received += data_len;
       //WriteStringPiece(base::StringPiece(data), false);
+      std::cout << "Got some data:" << data_len << "\n";
       return data_len;
+    }
+
+    void QuicServerStream::OnFinRead() {
+      for (uint64 i = 0; i < 10; i++) {
+	WriteStringPiece(base::StringPiece("This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   ), false);
+      }
+      WriteStringPiece(base::StringPiece("server_end"), true);
     }
 
     QuicPriority QuicServerStream::EffectivePriority() const {
@@ -42,8 +58,9 @@ namespace net {
     }
 
     void QuicServerStream::OnClose() {
+      // std::cout << bytes_received << "\n";
       ReliableQuicStream::OnClose();
-      exit(0);
+      // exit(0);
     }
   }
 }

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <chrono>
 #include <time.h>
 
 #include "net/base/ip_endpoint.h"
@@ -21,18 +22,6 @@
 
 using namespace std;
 
-uint64 FLAGS_total_transfer = 10 * 1000 * 1000;
-uint64 FLAGS_chunk_size = 1000;
-uint64 FLAGS_duration = 0;
-
-string randomString(uint length) {
-  string result = "";
-  for (uint i = 0; i < length; i++) {
-    result.push_back('a' + rand()%26);
-  }
-  return result;
-}
-
 int main(int argc, char *argv[]) {
   base::CommandLine::Init(argc, argv);
   base::CommandLine* line = base::CommandLine::ForCurrentProcess();
@@ -42,29 +31,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::string address = args[0];
-
-  if (line->HasSwitch("t")) {
-    if (!base::StringToUint64(line->GetSwitchValueASCII("t"), &FLAGS_total_transfer)) {
-      cout << "-t must be an unsigned integer\n";
-      return 1;
-    }
-  }
-  if (line->HasSwitch("c")) {
-    if (!base::StringToUint64(line->GetSwitchValueASCII("c"), &FLAGS_chunk_size)) {
-      cout << "-c must be an unsigned integer\n";
-      return 1;
-    }
-  }
-  if (line->HasSwitch("d")) {
-    if (!base::StringToUint64(line->GetSwitchValueASCII("d"), &FLAGS_duration)) {
-      cout << "-d must be an unsigned integer\n";
-      return 1;
-    }
-  }
-
-  cout << "Run parameters are:\nchunk size: " << FLAGS_chunk_size
-       << "\ntotal size: " << FLAGS_total_transfer
-       << "\nduration: " << FLAGS_duration << "\n";
 
   // Is needed for whatever reason
   base::AtExitManager exit_manager;
@@ -76,42 +42,34 @@ int main(int argc, char *argv[]) {
   net::IPEndPoint server_address(ip_address, 1337);
   net::QuicServerId server_id(address, 1337, /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
-  net::EpollServer epoll_server;
 
-  net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);
-  if (!client.Initialize()) {
-    cerr << "Could not initialize client" << endl;
-    return 1;
-  }
-  cout << "Successfully initialized client" << endl;
-  if (!client.Connect()) {
-    cout << "Client could not connect" << endl;
-    return 1;
-  }
-  cout << "Successfully connected to server, hopefully" << endl;
-  net::tools::QuicClientStream* stream = client.CreateClientStream();
-  if (FLAGS_duration == 0) {
-    for (uint64 i = 0; i < FLAGS_total_transfer; i += FLAGS_chunk_size) {
-      stream->WriteStringPiece(base::StringPiece(randomString(FLAGS_chunk_size)), false);
-      if (stream->HasBufferedData()) {
-        client.WaitForEvents();
-      }
+  for (int i = 0; i < 2; i++) {
+    net::EpollServer epoll_server;
+    net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);
+    if (!client.Initialize()) {
+      cerr << "Could not initialize client" << endl;
+      return 1;
     }
-    
-    while (stream->HasBufferedData()) {
+    cout << "Successfully initialized client" << endl;
+    if (!client.Connect()) {
+      cout << "Client could not connect" << endl;
+      return 1;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    net::tools::QuicClientStream* stream = client.CreateClientStream();
+    stream->WriteStringPiece(base::StringPiece("client_end"), true);
+
+    while (!stream->read_side_closed()) {
       client.WaitForEvents();
     }
-    
-  } else {
-    for (time_t dest = time(NULL) + FLAGS_duration; time(NULL) < dest; ) {
-      stream->WriteStringPiece(base::StringPiece(randomString(FLAGS_chunk_size)), false);
-      if (stream->HasBufferedData()) {
-        client.WaitForEvents();
-      }
-    }
-  }
 
-  stream->CloseConnection(net::QUIC_NO_ERROR);
-  client.Disconnect();
+    auto finish = std::chrono::high_resolution_clock::now();
+    auto dur = std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count();
+
+    cout << "Took time: " << dur << endl;
+
+    client.Disconnect();
+  }
 }
 

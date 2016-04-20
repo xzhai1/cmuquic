@@ -16,6 +16,8 @@ namespace net {
 
       uint32 ProcessRawData(const char* data, uint32 data_len) override;
 
+      void OnFinRead() override;
+
       QuicPriority EffectivePriority() const override;
 
       void WriteStringPiece(base::StringPiece data, bool fin);
