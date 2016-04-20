@@ -104,8 +104,8 @@ Now, as DPDK setup is concerned, this is the end of it. You may want to leave th
 Since we started using it, the authors have made some commits(including the unfortunate name change) that have complicated our setup and broken our application. So we are sticking to the older commits:
 
     cd dpdk-odp
-	git checkout 875a427
-	cd opendp
+    git checkout 875a427
+    cd opendp
 	
 Now, this is a twist, you have to make changes to ``odp_main.c``; you have to tell it what the IP address you would like to add to the interface and how you want the routing done. It is really just 2 lines of code:
 
@@ -113,7 +113,11 @@ Now, this is a twist, you have to make changes to ``odp_main.c``; you have to te
 	...
 	996     route_ret = netdp_add_route(0x03030303, 1, 0x02020202, 0x00ffffff, NETDP_IP_RTF_GATEWAY);
     
-You want to give it an address on your subnet. Finally build it:
+You want to give it an address on your subnet. Set one last environmental variable in ``~/.bashrc``:
+
+	export RTE_ODP=/root/dpdk-ans
+
+and source it. Finally build it:
 
 	make
 
