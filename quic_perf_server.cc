@@ -12,10 +12,17 @@
 #include "net/base/privacy_mode.h"
 #include "net/quic/quic_protocol.h"
 #include "net/quic/quic_server_id.h"
+#include <signal.h>
 
 using namespace std;
 
+static void exithandler(int _) {
+  cout << "Got sigint\n";
+  exit(1);
+}
+
 int main(int argc, char *argv[]) {
+  signal(SIGINT, exithandler);
 
   // Is needed for whatever reason
   base::AtExitManager exit_manager;

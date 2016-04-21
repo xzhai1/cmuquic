@@ -4,6 +4,7 @@
 #include <sstream>
 #include <chrono>
 #include <time.h>
+#include <signal.h>
 
 #include "net/base/ip_endpoint.h"
 #include "net/tools/quic/quic_client.h"
@@ -22,6 +23,11 @@
 
 using namespace std;
 
+static void exithandler(int _) {
+  cout << "Got sigint\n";
+  exit(1);
+}
+
 int main(int argc, char *argv[]) {
   base::CommandLine::Init(argc, argv);
   base::CommandLine* line = base::CommandLine::ForCurrentProcess();
@@ -31,6 +37,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::string address = args[0];
+
+  signal(SIGINT, exithandler);
 
   // Is needed for whatever reason
   base::AtExitManager exit_manager;
