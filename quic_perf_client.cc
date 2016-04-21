@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
   net::QuicServerId server_id(address, 1337, /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
 
-  for (int i = 0; i < 2; i++) {
+  while (1) {
     net::EpollServer epoll_server;
     net::tools::QuicClient client(server_address, server_id, supported_versions, &epoll_server);
     if (!client.Initialize()) {

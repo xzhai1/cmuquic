@@ -23,8 +23,15 @@ namespace net {
     }
 
     void QuicServerStream::OnFinRead() {
-      for (uint64 i = 0; i < 10; i++) {
+      for (uint64 i = 0; i < 1; i++) {
 	WriteStringPiece(base::StringPiece("This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
+					   "This is the string that never ends"
 					   "This is the string that never ends"
 					   "This is the string that never ends"
 					   "This is the string that never ends"
