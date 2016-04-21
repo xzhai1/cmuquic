@@ -58,9 +58,7 @@ int main(int argc, char *argv[]) {
   // Is needed for whatever reason
   base::AtExitManager exit_manager;
 
-  //net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
-  net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned
-  char> { 192, 168, 122, 100 };
+  net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
   net::IPEndPoint listen_address(ip_address, port_number);
   net::QuicConfig config;
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
