@@ -142,6 +142,7 @@ bool QuicServer::Listen(const IPEndPoint& address) {
       new QuicDispatcher::DefaultPacketWriterFactory(),
       new QuicEpollConnectionHelper(&epoll_server_)));
   dispatcher_->InitializeWithWriter(new QuicDefaultPacketWriter(fd_));
+  dispatcher_->SetPacketNum(packet_num_);
 
   return true;
 }

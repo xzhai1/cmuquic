@@ -9,6 +9,11 @@ namespace net {
     QuicServerStream::QuicServerStream(QuicStreamId id, QuicSession* session, QuicConnectionHelperInterface* helper)
       : ReliableQuicStream(id, session),
         helper_(helper) {
+          payload_.resize(1500);
+          /* Populate the whole packet with characters, so 1500 bytes */
+          for (int i = 0; i < 1500; i++) {
+            payload_[i] = 'x';
+          }
     }
 
     QuicServerStream::~QuicServerStream() {
@@ -23,23 +28,9 @@ namespace net {
     }
 
     void QuicServerStream::OnFinRead() {
-      for (uint64 i = 0; i < 1; i++) {
-	WriteStringPiece(base::StringPiece("This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   "This is the string that never ends"
-					   ), false);
+      std::cout << "goint to send " << packet_num_ << " packets" << "\n";
+      for (uint64 i = 0; i < packet_num_; i++) {
+        WriteStringPiece(base::StringPiece(payload_), false);
       }
       WriteStringPiece(base::StringPiece("server_end"), true);
     }

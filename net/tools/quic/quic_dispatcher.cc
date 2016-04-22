@@ -407,6 +407,7 @@ QuicServerSession* QuicDispatcher::CreateQuicSession(
 
   QuicServerSession* session = new QuicServerSession(config_, connection, this, helper_.get());
   session->InitializeSession(crypto_config_);
+  session->SetPacketNum(packet_num_);
   return session;
 }
 

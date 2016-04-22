@@ -2,6 +2,9 @@
 
 #include <iostream>
 
+#include <stdlib.h> /* printf */
+#include <unistd.h> /* getopt */
+
 #include "net/base/ip_endpoint.h"
 #include "net/tools/quic/quic_server.h"
 
@@ -24,7 +27,34 @@ static void exithandler(int _) {
 int main(int argc, char *argv[]) {
   signal(SIGINT, exithandler);
 
-  // Is needed for whatever reason
+  int opt;
+  int packet_num = -1;
+
+  /* : at start of optstring to indicate missing argument */
+  while ((opt = getopt(argc, argv, ":n:")) != -1) {
+    switch (opt) {
+    case 'n': 
+      packet_num = atoi(optarg);
+      break;
+    case ':':
+      printf("Missing argument\n");
+      return 1;
+    case '?':
+      printf("Unrecognized option\n");
+      return 1;
+    default:
+      printf("Usage: ./quic_perf_server -c chunk_size\n");
+      return 1;
+    }
+  }
+
+  /* can't have empty arg */
+  if (packet_num == -1) {
+      printf("Usage: ./quic_perf_server -n [number of packet]\n");
+      return 1;
+  }
+
+  /* Is needed for whatever reason */
   base::AtExitManager exit_manager;
 
   net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
@@ -34,7 +64,7 @@ int main(int argc, char *argv[]) {
   net::EpollServer epoll_server;
 
   net::tools::QuicServer server(config, supported_versions);
-
+  server.SetPacketNum(packet_num);
 
   // Start listening on the specified address.
   if (!server.Listen(listen_address)) {

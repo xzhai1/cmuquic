@@ -62,6 +62,9 @@ class QuicServerSession : public QuicSession {
 
   ~QuicServerSession() override;
 
+  /* Propogate to server stream */
+  void SetPacketNum(int packet_num) { packet_num_ = packet_num; }
+
   // |crypto_config| must outlive the session.
   virtual void InitializeSession(const QuicCryptoServerConfig* crypto_config);
 
@@ -84,6 +87,9 @@ class QuicServerSession : public QuicSession {
   QuicServerSessionVisitor* visitor_;
 
   QuicConnectionHelperInterface* helper_;
+
+  /* number of packets to deliver to client */
+  int packet_num_;
 
   // The most recent bandwidth estimate sent to the client.
   QuicBandwidth bandwidth_estimate_sent_to_client_;
