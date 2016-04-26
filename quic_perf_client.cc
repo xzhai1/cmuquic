@@ -31,6 +31,14 @@
 
 using namespace std;
 
+
+/**
+ * @brief exithandler
+ * 
+ * Short handler to catch Ctl-C and exit the program
+ *
+ * @param _
+ */
 static void exithandler(int _) {
   cout << "Got sigint\n";
   exit(1);
@@ -38,7 +46,9 @@ static void exithandler(int _) {
 
 
 /**
- * @brief usageError This is lifted out of Michael Kerrisk's TLPI book.
+ * @brief usageError
+ * 
+ * This is lifted out of Michael Kerrisk's TLPI book.
  *
  * @param progName  argv[0]
  * @param msg       error message
@@ -117,41 +127,30 @@ int main(int argc, char *argv[]) {
   net::QuicServerId server_id(ip_str, port_number, 
                               /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
-  net::EpollServer epoll_server;
-  net::tools::QuicClient client(server_address, server_id, 
-                                supported_versions, &epoll_server);
 
-  if (!client.Initialize()) {
-    LOG(ERROR) << "Could not initialize client";
-    return 1;
-  }
-  if (!client.Connect()) {
-    LOG(ERROR) << "Client could not connect";
-    return 1;
-  }
-
-  /* A stream is a "bi-directional flow of bytes across a logical channel
-   * within a QUIC connection". In other words, we can have multiple streams 
-   * in the same QUIC pipe. */
-  /* TODO for now we will keep this crap */
-  net::tools::QuicClientStream* stream = client.CreateClientStream();
-  if (FLAGS_duration == 0) {
-    for (uint64 i = 0; i < FLAGS_total_transfer; i += FLAGS_chunk_size) {
-      stream->WriteStringPiece(
-          base::StringPiece(randomString(FLAGS_chunk_size)), false);
-      if (stream->HasBufferedData()) {
-        client.WaitForEvents();
-      }
-    }
-    // cout << "Successfully initialized client" << endl;
-    if (!client.Connect()) {
-      cout << "Client could not connect" << endl;
+  //if (FLAGS_duration == 0) {
+  while (1) {
+    net::EpollServer epoll_server;
+    net::tools::QuicClient client(server_address, server_id, 
+                                  supported_versions, &epoll_server);
+    if (!client.Initialize()) {
+      LOG(ERROR) << "Could not initialize client";
       return 1;
     }
-    auto start = std::chrono::high_resolution_clock::now();
-    net::tools::QuicClientStream* stream = client.CreateClientStream();
-    stream->WriteStringPiece(base::StringPiece("client_end"), true);
+    if (!client.Connect()) {
+      LOG(ERROR) << "Client could not connect";
+      return 1;
+    }
 
+    /* A stream is a "bi-directional flow of bytes across a logical channel
+     * within a QUIC connection". In other words, we can have multiple streams 
+     * in the same QUIC pipe. */
+    net::tools::QuicClientStream* stream = client.CreateClientStream();
+    auto start = std::chrono::high_resolution_clock::now();
+
+    /* Half close */
+    stream->WriteStringPiece(base::StringPiece("client_end"), true);
+    /* And wait for data to come back */
     while (!stream->read_side_closed()) {
       client.WaitForEvents();
     }
@@ -159,9 +158,6 @@ int main(int argc, char *argv[]) {
     auto finish = std::chrono::high_resolution_clock::now();
     auto dur = std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count();
 
-    // cout << "Took time: " << dur << endl;
-
     client.Disconnect();
   }
 }
-
