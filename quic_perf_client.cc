@@ -1,14 +1,13 @@
-/* 
- *
- *
- *
- */
-
 /* C includes */
 #include <time.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <iostream>
+#include <sstream>
+#include <chrono>
+#include <time.h>
+#include <signal.h>
 
 /* This is the quic client & server implementation from google that we have
  * modified with netdp socket */
@@ -32,17 +31,9 @@
 
 using namespace std;
 
-/* TODO legacy bullshit. Will remove soon */
-uint64 FLAGS_total_transfer = 10 * 1000 * 1000;
-uint64 FLAGS_chunk_size = 1000;
-uint64 FLAGS_duration = 0;
-
-string randomString(uint length) {
-  string result = "";
-  for (uint i = 0; i < length; i++) {
-    result.push_back('a' + rand()%26);
-  }
-  return result;
+static void exithandler(int _) {
+  cout << "Got sigint\n";
+  exit(1);
 }
 
 
@@ -110,6 +101,7 @@ int main(int argc, char *argv[]) {
   }
 
   LOG(INFO) << "Connecting to " << ip_str << ":" << port_number;
+  signal(SIGINT, exithandler);
 
   /* This is required. Otherwise, this error will be thrown:
    * [0408/210628:FATAL:at_exit.cc(53)] Check failed: false. 
@@ -151,22 +143,25 @@ int main(int argc, char *argv[]) {
         client.WaitForEvents();
       }
     }
-    
-    while (stream->HasBufferedData()) {
+    // cout << "Successfully initialized client" << endl;
+    if (!client.Connect()) {
+      cout << "Client could not connect" << endl;
+      return 1;
+    }
+    auto start = std::chrono::high_resolution_clock::now();
+    net::tools::QuicClientStream* stream = client.CreateClientStream();
+    stream->WriteStringPiece(base::StringPiece("client_end"), true);
+
+    while (!stream->read_side_closed()) {
       client.WaitForEvents();
     }
-    
-  } else {
-    for (time_t dest = time(NULL) + FLAGS_duration; time(NULL) < dest; ) {
-      stream->WriteStringPiece(
-          base::StringPiece(randomString(FLAGS_chunk_size)), false);
-      if (stream->HasBufferedData()) {
-        client.WaitForEvents();
-      }
-    }
-  }
 
-  stream->CloseConnection(net::QUIC_NO_ERROR);
-  client.Disconnect();
+    auto finish = std::chrono::high_resolution_clock::now();
+    auto dur = std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count();
+
+    // cout << "Took time: " << dur << endl;
+
+    client.Disconnect();
+  }
 }
 

@@ -39,6 +39,9 @@ class QuicServer : public EpollCallbackInterface {
 
   ~QuicServer() override;
 
+  /* Propogate to server session and eventually to stream */
+  bool SetPacketNum(int packet_num) { packet_num_ = packet_num; }
+
   // Start listening on the specified address.
   bool Listen(const IPEndPoint& address);
 
@@ -96,6 +99,8 @@ class QuicServer : public EpollCallbackInterface {
 
   // Listening connection.  Also used for outbound client communication.
   int fd_;
+
+  int packet_num_;
 
   // If overflow_supported_ is true this will be the number of packets dropped
   // during the lifetime of the server.  This may overflow if enough packets

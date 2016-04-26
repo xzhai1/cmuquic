@@ -12,7 +12,7 @@ namespace net {
     QuicClientStream::~QuicClientStream() {}
 
     uint32 QuicClientStream::ProcessRawData(const char* data, uint32 data_len) {
-      std::cout << "Received " << data_len << " bytes of data\n";
+      // std::cout << "Received " << data_len << " bytes of data\n";
       return data_len;
     }
 

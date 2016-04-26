@@ -79,6 +79,9 @@ class QuicDispatcher : public QuicServerSessionVisitor,
   // Takes ownership of |writer|.
   void InitializeWithWriter(QuicPacketWriter* writer);
 
+  /* Propogate to session */
+  void SetPacketNum(int packet_num) { packet_num_ = packet_num; }
+
   // Process the incoming packet by creating a new session, passing it to
   // an existing session, or passing it to the TimeWaitListManager.
   void ProcessPacket(const IPEndPoint& server_address,
@@ -204,6 +207,8 @@ class QuicDispatcher : public QuicServerSessionVisitor,
   void CleanUpSession(SessionMap::iterator it);
 
   bool HandlePacketForTimeWait(const QuicPacketPublicHeader& header);
+
+  int packet_num_;
 
   const QuicConfig& config_;
 
