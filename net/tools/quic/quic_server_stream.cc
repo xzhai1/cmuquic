@@ -24,12 +24,12 @@ namespace net {
     uint32 QuicServerStream::ProcessRawData(const char* data, uint32 data_len) {
       bytes_received += data_len;
       //WriteStringPiece(base::StringPiece(data), false);
-      std::cout << "Got some data:" << data_len << "\n";
+      // std::cout << "Got some data:" << data_len << "\n";
       return data_len;
     }
 
     void QuicServerStream::OnFinRead() {
-      std::cout << "goint to send " << packet_num_ << " packets" << "\n";
+      // std::cout << "goint to send " << packet_num_ << " packets" << "\n";
       for (uint64 i = 0; i < packet_num_; i++) {
         WriteStringPiece(base::StringPiece(payload_), false);
       }

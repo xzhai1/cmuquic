@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
       cerr << "Could not initialize client" << endl;
       return 1;
     }
-    cout << "Successfully initialized client" << endl;
+    // cout << "Successfully initialized client" << endl;
     if (!client.Connect()) {
       cout << "Client could not connect" << endl;
       return 1;
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
     auto finish = std::chrono::high_resolution_clock::now();
     auto dur = std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count();
 
-    cout << "Took time: " << dur << endl;
+    // cout << "Took time: " << dur << endl;
 
     client.Disconnect();
   }
