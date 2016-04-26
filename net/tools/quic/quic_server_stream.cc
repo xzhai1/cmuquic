@@ -6,12 +6,13 @@
 namespace net {
   namespace tools {
 
-    QuicServerStream::QuicServerStream(QuicStreamId id, QuicSession* session, QuicConnectionHelperInterface* helper)
+    QuicServerStream::QuicServerStream(QuicStreamId id, QuicSession* session,
+				       QuicConnectionHelperInterface* helper)
       : ReliableQuicStream(id, session),
         helper_(helper) {
-          payload_.resize(1500);
-          /* Populate the whole packet with characters, so 1500 bytes */
-          for (int i = 0; i < 1500; i++) {
+          payload_.resize(1300);
+	  // 1300 bytes is about how much data can fit in one UDP packet, after headers are included
+          for (int i = 0; i < 1300; i++) {
             payload_[i] = 'x';
           }
     }
