@@ -31,7 +31,6 @@
 
 using namespace std;
 
-
 /**
  * @brief exithandler
  * 
@@ -39,7 +38,9 @@ using namespace std;
  *
  * @param _
  */
-static void exithandler(int _) {
+static void 
+exithandler(int _) 
+{
   cout << "Got sigint\n";
   exit(1);
 }
@@ -59,12 +60,13 @@ usageError(char *progName, char *msg, int opt)
 {
     if (msg != NULL && opt != 0)
         fprintf(stderr, "%s (-%c)\n", msg, printable(opt));
-    fprintf(stderr, "Usage: %s [-p port_number]\n", progName);
+    fprintf(stderr, "Usage: %s -p port_number ip_number\n", progName);
     exit(EXIT_FAILURE);
 }
 
-int main(int argc, char *argv[]) {
-
+int 
+main(int argc, char *argv[]) 
+{
   int   opt;
   char  *ip_str;
   int   port_number = -1; 
@@ -94,13 +96,11 @@ int main(int argc, char *argv[]) {
 
   /* And server ip address needs to be supplied */
   if (optind == argc) {
-      fprintf(stderr, "You need to supply an ip address!\n");
       usageError(argv[0], NULL, optopt);
       return 1;
   }
 
   /* The first nonoption argument has to be ip address */
-  /* TODO validate ip address */
   ip_str = argv[optind];
 
   /* We have to initialize netdpsock first. 
@@ -111,6 +111,8 @@ int main(int argc, char *argv[]) {
   }
 
   LOG(INFO) << "Connecting to " << ip_str << ":" << port_number;
+
+  /* Install a handler to catch Ctl-C so we can at least exit gracefully */
   signal(SIGINT, exithandler);
 
   /* This is required. Otherwise, this error will be thrown:
@@ -120,23 +122,23 @@ int main(int argc, char *argv[]) {
 
   unsigned char a, b, c, d;
   sscanf(ip_str, "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d);
-
   net::IPAddressNumber ip_address =
     (net::IPAddressNumber) std::vector<unsigned char>{a, b, c, d};
   net::IPEndPoint server_address(ip_address, port_number);
   net::QuicServerId server_id(ip_str, port_number, 
                               /*is_http*/ false, net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
+  net::EpollServer epoll_server;
 
-  //if (FLAGS_duration == 0) {
   while (1) {
-    net::EpollServer epoll_server;
+    /* Reconstruct the client */
     net::tools::QuicClient client(server_address, server_id, 
                                   supported_versions, &epoll_server);
     if (!client.Initialize()) {
       LOG(ERROR) << "Could not initialize client";
       return 1;
     }
+
     if (!client.Connect()) {
       LOG(ERROR) << "Client could not connect";
       return 1;

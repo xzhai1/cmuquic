@@ -1,13 +1,11 @@
-// Small demo that reads form stdin and sents over a quic connection
+#include <unistd.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <stdlib.h> /* printf */
+#include <unistd.h> /* getopt */
 
 #include <iostream>
 #include <cstdio>
-
-#include <unistd.h>
-#include <stdlib.h>
-
-#include <stdlib.h> /* printf */
-#include <unistd.h> /* getopt */
 
 #include "net/base/ip_endpoint.h"
 #include "net/tools/quic/quic_server.h"
@@ -19,17 +17,39 @@
 #include "net/base/privacy_mode.h"
 #include "net/quic/quic_protocol.h"
 #include "net/quic/quic_server_id.h"
-#include <signal.h>
+
+#define printable(ch) (isprint((unsigned char) ch) ? ch : '#')
 
 using namespace std;
 
-static void exithandler(int _) {
+static void 
+exithandler(int _) 
+{
   cout << "Got sigint\n";
   exit(1);
 }
 
-int main(int argc, char *argv[]) {
-  signal(SIGINT, exithandler);
+/**
+ * @brief usageError
+ *
+ * This is lifted out of Michael Kerrisk's TLPI book.
+ *
+ * @param progName  argv[0]
+ * @param msg       error message
+ * @param opt       returned option value
+ */
+static void
+usageError(char *progName, char *msg, int opt)
+{
+    if (msg != NULL && opt != 0)
+        fprintf(stderr, "%s (-%c)\n", msg, printable(opt));
+    fprintf(stderr, "Usage: %s -p port_number -n num_of_packets\n", progName);
+    exit(EXIT_FAILURE);
+}
+
+int 
+main(int argc, char *argv[]) 
+{
 
   int opt;
   int port_number = -1;
@@ -44,21 +64,25 @@ int main(int argc, char *argv[]) {
       packet_num = atoi(optarg);
       break;
     case ':':
-      printf("Missing argument\n");
+      usageError(argv[0], "Missing argument", optopt);
       return 1;
     case '?':
-      printf("Unrecognized option\n");
+      usageError(argv[0], "Unrecognized option", optopt);
       return 1;
     default:
-      printf("Usage: ./quic_perf_server -p port_number -n num_of_packets\n");
+      usageError(argv[0], NULL, optopt);
       return 1;
     }
   }
+
   /* can't have empty arg */
-  if (port_number == -1) {
-      printf("Usage: ./quic_perf_server -p port_number -n num_of_packets\n");
-      return 1;
+  if (port_number == -1 || packet_num == -1) {
+    usageError(argv[0], NULL, optopt);
+    return 1;
   }
+
+  printf("port number specified at %d\n", port_number);
+  printf("number of packets specified at %d\n", packet_num);
 
   /* We have to initialize netdpsock first.
      Init runs only once for each process */
@@ -67,34 +91,28 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /* can't have empty arg */
-  if (packet_num == -1) {
-      printf("Usage: ./quic_perf_server -p port_number -n num_of_packets\n");
-      return 1;
-  }
-
-  printf("port number specified at %d\n", port_number);
-
   /* Is needed for whatever reason */
   base::AtExitManager exit_manager;
 
-  net::IPAddressNumber ip_address = (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
+  net::IPAddressNumber ip_address = 
+    (net::IPAddressNumber) std::vector<unsigned char> { 0, 0, 0, 0 };
   net::IPEndPoint listen_address(ip_address, port_number);
   net::QuicConfig config;
   net::QuicVersionVector supported_versions = net::QuicSupportedVersions();
-  //net::EpollServer epoll_server;
-
   net::tools::QuicServer server(config, supported_versions);
   server.SetPacketNum(packet_num);
 
-  // Start listening on the specified address.
+  /* Start listening on the specified address. */
   if (!server.Listen(listen_address)) {
     cerr << "Could not listen on socket" << endl;
     return 1;
   }
 
-  // server listens and responds until killed
-  // (or until it calls exit somewhere inside WaitForEvents)
+  /* Install signal handler to gracefully exit */
+  signal(SIGINT, exithandler);
+
+  /* server listens and responds until killed
+   * (or until it calls exit somewhere inside WaitForEvents) */
   while (1) {
     server.WaitForEvents();
   }
