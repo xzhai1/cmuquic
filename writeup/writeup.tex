@@ -192,18 +192,151 @@ The protocol classes do not create or own any file descriptors and therefore, we
 %https://github.com/devsisters/libquic
 %https://github.com/google/proto-quic
 
-\section{Benchmark Setup and Measurements}
-This section presents the VM setup, tests scenarios and layout the measurement result.
+\section{Benchmark Setup}
+Our benchmark setup consisted of two QEMU/KVM virtual machines,
+quic-server and quic-client,
+which respectively ran the server and client processes for our benchmarking and profiling.
+The virtual machines were located on different hosts,
+so the traffic between them crossed physical network links, rather than an emulated in-kernel bridge;
+this was desired to increase the realism of our profiling.
+Each VM had 4 virtual x86\_64 CPUs each and 4GB of RAM,
+and had two Intel Corporation 82540EM NICs, emulated by QEMU,
+one for traffic and one for control.
+The VMs ran Ubuntu 14.04,
+running Linux 3.13,
+Ubuntu package linux-generic-3.13.0-85.91.
+
+Our testing harness ran a single server process on the server VM,
+and some number of client processes on the client VM.
+Each client process connects to the server process,
+reads off some amount of data sent by the server,
+then disconnects when the server indicates it is done sending data (with a FIN packet).
+This is done in a loop in each client process, repeatedly reconnecting, reading data, and disconnecting.
+The server process, meanwhile, just listens for connections, and immediately sends data followed by a FIN packet to each connecting client.
+
+We used a single server process and client process implementation with both 
+stock libquic using POSIX sockets
+(referred to hereafter as Linux QUIC)
+and our modified libquic using DPDK
+(referred to hereafter as DPDK QUIC).
+We simply compiled the server and client with both Linux QUIC and DPDK QUIC.
+
+The server process was run under monitoring by the perf profiler.
+% TODO insert thing about perf efficiency here
+Therefore, we don't believe running under the perf profiler distorts our results.
+Running under perf allowed us to see how the performance profile of the server changed in different scenarios.
+Profiling with perf allowed us also to profile into the kernel,
+revealing how much time was spent in certain functions in the network stack,
+even down to the level of individual instructions.
+
+We also monitored activity on the server network interface using ifstat on the VM host,
+using this to determine the steady transmission rate in each test scenario.
+
+We tested both Linux and DPDK QUIC clients with both Linux and DPDK QUIC servers,
+with various different amounts of data transmitted.
+The parameter controlling how much data was transmitted was the number of times we transmitted the 1300-octet fixed buffer that made up our data;
+1300 octets roughly corresponds to the amount of data that could fit in a single packet,
+so this parameter roughly correponds to the number of packets sent per connection.
 
 \section{Evaluation}
-Why did we observe what we observed?
+
+\begin{figure}[bh]
+\centering
+\includegraphics[width=\textwidth]{plot.png}
+\caption{Results of running benchmarks with different client/server setups}
+\label{fig:benchmark}
+\end{figure}
+
+A summary of our measurements can be seen in Figure \ref{fig:benchmark}.
+
+As can be seen from the graph, when one or both sides of the benchmarking setup were using DPDK,
+we saw a significant performance increase under certian conditions.
+% this doesn't make any sense... 
+% the server was the bottleneck, so only the server should lead to a performance increase...
+% perhaps it's 100% spurious and caused by a quirk of DPDK ODP
+
+However, at a higher value of our transmission size parameter, the highest we tested,
+when one or both sides of the benchmarking setup are using DPDK,
+our performance drops back down below that of Linux.
+It's possible that this is due to some scaling issue or bug in the DPDK network stack,
+but we have not yet been able to determine the cause.
+
+Notably, scenarios with a small data transmission size and a DPDK server
+slightly underperform scenarios with a small data transmission size and a Linux server.
+We believe that this is due to
+% TODO what is the cause of this
+
+% TODO some kind of table? or just raw text? landscape?
+\begin{figure}[bh]
+\centering
+hurr durr
+% \includegraphics[scale=0.27]{web.png}
+\caption{Top functon hotspots as measured by perf}
+\label{fig:profile}
+\end{figure}
+
+A summary of our profiling the server in different scenarios with the perf profiler
+can be seen in Figure \ref{fig:profile};
+this is the top 5 function hotspots for each scenario.
+Note that since DPDK runs its network stack in a separate process outside of the kernel,
+we are not able to use perf's ability to profile the kernel alongside the rest of the program with DPDK.
+We do, however, see functions such as \verb|e1000_xmit_frame| in the Linux profile.
+
+As the amount of data sent in a single connection increases,
+the relative overhead of the constant connection setup time decreases.
+This is visible in our profiling;
+for benchmarking scenarios with small amounts of data, the hotspots are in cryptographic functions,
+while in scenarios with larger amounts of data,
+network operations and datastructure manipulation become more significant.
+
+Nevertheless, even at the largest data size,
+cryptographic functions (in particular the stream cipher used to encrypt the data)
+remain in the top 5 hotspot functions.
+And even at the smallest data size,
+network stack function are still hotspots.
+
+Since it is a reasonable assumption that the cryptographic code
+(being an implementation of the novel but widely used ChaCha cipher)
+is already well-tuned for performance,
+the obvious place therefore for performance improvements at all scales
+is the network stack.
+Our results show that this can be a fruitful approach.
+
+As well, QUIC internal datastructure manipulations pose a great scalability problem;
+as the amount of data being sent increases,
+these datastructure manipulations rapidly become the biggest hotspots.
+For the development of a scalable QUIC server, optimizations of these datastructures
+- in particular the ReliableQuicStream pending data list -
+is critical.
 
 \section{Future Work}
-What we wished we did?
+
+Future work will include investigating some of the behaviors uncovered in our benchmarking.
+In particular, the improved performance but decreased scalability of the DPDK-based QUIC stack
+is not yet well understood;
+why does DPDK performance greatly decrease over a certain per-connection-data-size?
+Profiling and benchmarking DPDK itself will be helpful in determining the cause of this behavior.
+
+Optimizations on the internal QUIC datastructures,
+especially the significant ones found in our profiling,
+may help counteract any scalability problems of the DPDK-based QUIC stack.
+
+DPDK has a strong framework for parallel processing of packets;
+however, the existing QUIC stack is not well suited for parallel procssing.
+Making the QUIC stack support multithreaded or multiprocess operation would be very helpful.
+
+More prosaically, porting our changes to the QUIC stack from libquic
+to the Google-associated protoquic
+will be important to give our work a greater impact;
+it is also valuable as a way to pickup performance improvements and bugfixes that have happened upstream
+since our version of libquic was last updated.
 
 \section{Conclusions}
 
+% TODO conclusions
+
 \section{Acknowledgments}
+
 
 
 \bibliographystyle{abbrv}
