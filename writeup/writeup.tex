@@ -197,9 +197,9 @@ The protocol classes do not create or own any file descriptors and therefore, we
 Our benchmark setup consisted of two QEMU/KVM virtual machines,
 quic-server and quic-client,
 which respectively ran the server and client processes for our benchmarking and profiling.
-The virtual machines were located on different hosts,
-so the traffic between them crossed physical network links, rather than an emulated in-kernel bridge;
-this was desired to increase the realism of our profiling.
+We ran our benchmarking both with the two VMs on different hosts,
+connected by a physical network link for realism,
+and with the two VMs on the same host, connected by a standard Linux virtual switch.
 Each VM had 4 virtual x86\_64 CPUs each and 4GB of RAM,
 and had two Intel Corporation 82540EM NICs, emulated by QEMU,
 one for traffic and one for control.
@@ -207,13 +207,14 @@ The VMs ran Ubuntu 14.04,
 running Linux 3.13,
 Ubuntu package linux-generic-3.13.0-85.91.
 
-Our testing harness ran a single server process on the server VM,
+The testing harness for our code ran a single server process on the server VM,
 and some number of client processes on the client VM.
 Each client process connects to the server process,
 reads off some amount of data sent by the server,
 then disconnects when the server indicates it is done sending data (with a FIN packet).
 This is done in a loop in each client process, repeatedly reconnecting, reading data, and disconnecting.
-The server process, meanwhile, just listens for connections, and immediately sends data followed by a FIN packet to each connecting client.
+The server process, meanwhile, just listens for connections,
+and immediately sends data followed by a FIN packet to each connecting client.
 
 We used a single server process and client process implementation with both 
 stock libquic using POSIX sockets
@@ -223,7 +224,8 @@ and our modified libquic using DPDK
 We simply compiled the server and client with both Linux QUIC and DPDK QUIC.
 
 The server process was run under monitoring by the perf profiler.
-% TODO insert thing about perf efficiency here
+The perf profiler makes of hardware features and has strong Linux kernel support
+to allow it to profile applications without impacting their performance.
 Therefore, we don't believe running under the perf profiler distorts our results.
 Running under perf allowed us to see how the performance profile of the server changed in different scenarios.
 Profiling with perf allowed us also to profile into the kernel,
@@ -231,7 +233,7 @@ revealing how much time was spent in certain functions in the network stack,
 even down to the level of individual instructions.
 
 We also monitored activity on the server network interface,
-using \texttt{ifstat} on the VM host,
+using ifstat on the VM host,
 to determine the steady data transmission rate in each test scenario.
 
 We tested both Linux and DPDK QUIC clients with both Linux and DPDK QUIC servers,
@@ -243,17 +245,23 @@ so this parameter roughly correponds to the number of packets sent per connectio
 \begin{figure}[bh]
 \centering
 \includegraphics[scale=0.5]{plot.png}
-\caption{Results of running benchmarks with different client/server setups}
+\caption{Results of running benchmarks with different client/server setups (different hosts)}
 \label{fig:benchmark}
 \end{figure}
 
-A graph of our measurements can be seen in Figure \ref{fig:benchmark}.
+\begin{figure}[bh]
+\centering
+\includegraphics[scale=0.5]{plot-adj.png}
+\caption{Results of running benchmarks with different client/server setups (same host)}
+\label{fig:benchmark-adj}
+\end{figure}
+
+Figure \ref{fig:benchmark} shows our measurements with the VMs on different hosts;
+Figure \ref{fig:benchmark-adj} shows our measurements with the VMs on the same host.
+For comparison, these also show the results of benchmarking Apache under the same setup.
 
 As can be seen from the graph, when the server side of the benchmarking setup was using DPDK,
 we saw a significant performance increase in scenarios with moderately large data sizes.
-% this doesn't make any sense... 
-% the server was the bottleneck, so only the server should lead to a performance increase...
-% perhaps it's 100% spurious and caused by a quirk of DPDK ODP
 
 However, at a higher value of our transmission size parameter, the highest we tested,
 when one or both sides of the benchmarking setup are using DPDK,
