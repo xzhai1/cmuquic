@@ -22,24 +22,24 @@
 
 \maketitle
 \begin{abstract}
-In this project, we modified the stock QUIC client/server implementation by replacing their Linux kernel socket calls with those from DPDK-ANS. We deployed 4 different combinations of client/server and measured throughput between them over a range of transfer size. The result suggests that, \textit{ceteris paribus}, DPDk-ANS outperforms Linux network stack for medium to large transfers. However, a cursory comparison against Apache benchmark suggests that the stock client/server needs optimization.
+In this project, we modified the stock QUIC client/server implementation by replacing their Linux kernel socket calls with those from DPDK-ANS. We deployed 4 different combinations of client/server and measured throughput between them over a range of transfer size. The result suggests that, \textit{ceteris paribus}, DPDK-ANS outperforms Linux network stack for medium to large transfers. However, a cursory comparison against Apache benchmark suggests that the stock client/server needs optimization.
 \end{abstract}
 
 \section{Introduction}
-QUIC (Quick UDP Internet Connection) is a new transport layer protocol designed and built by Google in its constant effort do make the web faster. Functionally, QUIC = TCP + TLS + SPDY. It employs optimized TCP Cubic congestion control; it combines crypto with handshake in connection establishment; it also multiplexes streams onto a single connection and manages flow control individually. It ddresses many debilitating TCP hadicaps that is anachronistic in the modern web age and most prominantly, QUIC runs in user space, allowing for faster experimentation and wider adoption with the protocol. 
+QUIC (Quick UDP Internet Connection) is a new transport layer protocol designed and built by Google in its constant effort do make the web faster. Functionally, QUIC = TCP + TLS + SPDY. It employs optimized TCP Cubic congestion control; it combines crypto with handshake in connection establishment; it also multiplexes streams onto a single connection and manages flow control individually. It addresses many debilitating TCP hadicaps that are anachronistic in the modern web age. Most prominently, QUIC runs in user space, allowing for faster experimentation and wider adoption with the protocol. 
 
-Currently, the protocol implementation is folded into the chromium project and shipped with a stock client/server. All traffic running between Chrome browser and Google services are conducted atop the new protocol, constituting a non-trivial amount of all web traffic.
+Currently, the protocol implementation is folded into the Chromium project and shipped with a stock client/server. All traffic running between Chrome browsers and Google services are conducted atop the new protocol, constituting a non-trivial amount of all web traffic.
 
-DPDK-ANS (DPDK Accelerated Network Stack) is a port of the FreeBSD TCP/IP stack built on top of Intel's Data Plane Development Kit (DPDK), a collection of low level libraries optimized for the Intel Architecture, intended for customized packet processing application. 
+DPDK-ANS (Data Plane Development Kit - Accelerated Network Stack) is a port of the FreeBSD TCP/IP stack built on top of Intel's DPDK, a collection of low level libraries optimized for the Intel Architecture, intended for custom packet processing applications. 
 
-Our intention in this project is to look at the stock implementaions and see if we can make the client/server run faster on DPDK-ANS.
+Our intention in this project is to look at the stock implementation and see if we can make the client/server run faster on DPDK-ANS.
 
 \section{Background}
 Our web experience is largely dominated by two factors: how fast the website loads, and how native and instantaneous the interaction feels. The former is determined by the latency of the plumbing, i.e. the network infrastracture, while the latter can be ascribed to the design, architecture and the engineering of the particular web service. To systemically and universally improve the experience, making the plumbing better is crucial. 
 
-From the bottom up, companies like Google, Facebook and Netflix have either utilized Content Distribution Networks(CDNs), or deployed their own, to bypass the middle mile, shorten the last mile and bring the content closer to the user. From the top down, Google's Chrome web browser has employed numerous software optimizations such as speculatively querying DNS, establishing TCP connections, and even firing off resource requests based on learned user traffic patterns to minimize the latency on the browser end.\cite{grigorik:chrome} 
+From the bottom up, companies like Google, Facebook and Netflix have either utilized Content Distribution Networks (CDNs), or deployed their own, to bypass the middle mile, shorten the last mile and bring the content closer to the user. From the top down, Google's Chrome web browser has employed numerous software optimizations such as speculatively querying DNS, establishing TCP connections, and even firing off resource requests based on learned user traffic patterns to minimize the latency on the browser end.\cite{grigorik:chrome} 
 
-What is left in the middle are the stacks of protocols in need of overhaul for the modern web, and the people from Google are at it again. First, they developed the application layer protocol SPDY to address the pitfalls, particularly relating to latency, of HTTP/1.1 for delivering web pages. The motivation is that changes to transport layer are difficult to deploy because they all live in kernel space, and you get more bang for the buck if all the obvious and egregious handicaps in HTTP/1.1 can be addressed. Table~\ref{tab:httpvspdy} shows some of them and SPDY's remedy.
+What is left is the web protocol stack and people at Google have been making changes to them. First, they developed the application layer protocol SPDY to address the pitfalls, particularly relating to latency, of HTTP/1.1 for delivering web pages. The motivation is that changes to transport layer are difficult to deploy because they all live in kernel space, and you get more bang for the buck if all the obvious and egregious handicaps in HTTP/1.1 can be addressed. Table~\ref{tab:httpvspdy} shows some of them and SPDY's remedy.
 
 \vspace*{-10pt}
 \begin{table}[h]
@@ -58,7 +58,7 @@ Redundant headers & Elimination \\ \hline
 
 On the client side, the Chrome browser has support for SPDY, and on the server side, Google donated the \texttt{mod\_spdy} to the Apache HTTPD codebase to support the protocol. Benchmark testing revealed a 64\% reduction in page loading over traditional HTTP/1.1. The SPDY protocol eventually formed the foundation of HTTP/2.
 
-Google's quest for a faster web did not stop at the application protocol layer and the effort eventually spilled into the transport layer. If the main assumption in developing SPDY was ``well, there is nothing we can do about suboptimal networking stack, let's do our best to optimize the application protocol,'' then the implicit assumption this round is ``there is nothing we can do about the speed of light, let's reduce the number of trips needed for a connection.''\cite{quic:announcement} Having realized that developing a kernel implementation of the new protocol would be slow for experimentation and deployment, the QUIC developers decided to have this new protocol live in userland and employ UDP layer to move its packets. 
+Google's quest for a faster web did not stop at the application protocol layer and the effort eventually spilled into the transport layer. If the main assumption in developing SPDY was ``well, there is nothing we can do about suboptimal networking stack, let's do our best to optimize the application protocol,'' then the implicit assumption this round is ``there is nothing we can do about the speed of light, let's reduce the number of trips needed for a connection.'' The QUIC developers decided to have this new protocol live in userland and employ UDP layer to move its packets because developing a kernel implementation of the new protocol would be slow for experimentation and deployment. 
 
 Since its stable release in April 2014, Google has ramped up the QUIC traffic to Google's services and analyzed its performance on a larger scale. Its empirical data suggest that it is 5\% faster on page load on average, mostly due to 0-RTT connection establishment, and 30\% less rebuffering for Youtube videos attributable to better handling of packet loss and stream level flow control.\cite{quic:presentation}
 
@@ -69,9 +69,9 @@ Since its stable release in April 2014, Google has ramped up the QUIC traffic to
 \label{fig:webstack}
 \end{figure}
 
-Figure \ref{fig:webstack} shows a rather promising landscape. It seems that what is standing between us and the promised land of seamless web experience, at least from a networking perspective, are the speed of light (which we can't change), and how fast raw bytes on the wire are processed by the kernel and handed to the application. Intel's DPDK is here to bridg gap. Data Plane Development Kit, first and foremost, is not a networking stack; it does not provide the ease and comform of Layer-3 forwarding, IPsec, firewalling, etc. It is a collection of low level libraries, NIC drivers and a runtime environment living alongside the kernel for building custom applications in need of lightening fast packet processing.\cite{dpdk:home} Notably, pfSense laid out a roadmap where the core of it will be rewritten with DPDK to run at the line rate of 10Gbps interfaces. \cite{pfsense:roadmap}
+Figure \ref{fig:webstack} shows a promising landscape. From a networking perspective, only two things stand between us and the promised land of seamless web experience: the speed of light (which we can't change), and how fast raw bytes on the wire are processed by the kernel and handed to the application. Intel's DPDK is here to bridge the gap. It is, first and foremost, not a networking stack; it does not provide the ease and comform of Layer-3 forwarding, IPsec, firewalling, etc. It is a collection of low level libraries, NIC drivers and a runtime environment living alongside the kernel for building custom applications in need of lightening fast packet processing.\cite{dpdk:home} For example, pfSense laid out a roadmap where the core of it will be rewritten with DPDK to run at the line rate of 10Gbps interfaces. \cite{pfsense:roadmap}
 
-Hence, it is our intention to investigate if QUIC's stock client/server performance can be further elevated using DPDK. In this project, we make 4 main contributions:
+Hence, it is our intention to investigate if QUIC's stock client/server performance can be further improved using DPDK. In this project, we make 4 main contributions:
 
 \begin{enumerate}
 	\itemsep0em
@@ -82,22 +82,22 @@ Hence, it is our intention to investigate if QUIC's stock client/server performa
 \end{enumerate}
 
 \section{QUIC v.s. TCP}
-As a transport layer protocol developed from the ground up, QUIC is packed with new features aimed at incorporating application layer workarounds to TCP's shortcomings(e.g. HTTP/2's stream multiplexing), fixing inherent TCP problems(e.g. retransmission ambiguity), and optimizing for low latency and security.
+As a transport layer protocol developed from the ground up, QUIC is packed with new features aimed at removing the need for application layer workarounds to TCP's shortcomings (e.g. HTTP/2's stream multiplexing), fixing inherent TCP problems (e.g. retransmission ambiguity), and optimizing for low latency and security.
 
 \subsection{Multiplexing and Flow Control}
 QUIC transplanted two important features from HTTP/2 and implemented them natively in the transport layer: stream multiplexing and dedicated flow controls.
 
-HTTP/2 multiplexes many streams on top of TCP's single byte stream abstraction, but it still suffers from head of line blocking. Within a single TCP connection, there is no distinction between packets of different streams and a lost packet from one stream is still backed up behind those from a stalled one. In QUIC, multiple streams share the same connection and some streams can always make progress in the event of lost packets in others. As a result, QUIC also implements flow control on both the stream level and the connection level. A QUIC receiver keeps track of and advertises the window size for each stream to the sender, as well as the aggregate buffer size, bytes received and offset data. \cite{quic:draft}
+HTTP/2 multiplexes many streams on top of TCP's single byte stream abstraction, but it still suffers from head of line blocking. Within a single TCP connection, there is no distinction between packets of different streams and packet lost in one stream will stall all other streams. In QUIC, streams can make progress even in the event of lost packets in others. As a result, QUIC also implements flow control on both the stream level and the connection level. A QUIC receiver keeps track of and advertises the window size for each stream to the sender, as well as the aggregate buffer size, bytes received and offset data. \cite{quic:draft}
 
 \subsection{Connection establishment}
 Traditionally, the TCP 3 way handshake is the unavoidable cost of doing business on the web. A further 1.5 RTT is required to establish TLS. When all is said and done, 3 RTTs are wasted before application data actually flows. This is a very low hanging fruit for QUIC to pick off. 
 
-QUIC boasts of a 0 RTT for connection establishment largely based on the assumption that the client has talked to the server before and cached the server's configuration. Otherwise, it combines crypto with handshake in a dedicated stream(Stream ID 1) to initiate a connection.
+QUIC boasts of a 0 RTT for connection establishment based on the assumption that the client has talked to the server before and cached the server's configuration. Otherwise, it combines crypto with handshake in a dedicated stream (Stream ID 1) to initiate a connection.
 
-The client sends an initial inchoate hello (CHLO) to the server, specifying among other things, the common certificates it already possesses and cached certificates from previous interaction with the server(if there are any). This allows the server to not send back the whole certificate chain later. The server responds with a rejection (REJ) containing most importantly, server configuration (SCFG), in which it provides a list of available key exchange algorithms and their corresponding public values. Then the client picks an algorithm and its own corresponding public value and resends the CHLO. At this point, the client doesn't even wait for the server's reply and immediately starts sending encrypted application data. \cite{quic:crypto}
+The client sends an initial hello (CHLO) to the server, specifying among other things, the common certificates it already possesses and cached certificates from previous interaction with the server (if there are any). This allows the server to not send back the whole certificate chain later. The server responds with a rejection (REJ) containing most importantly, server configuration (SCFG), in which it provides a list of available key exchange algorithms and their corresponding public values. Then the client picks an algorithm and its own corresponding public value and resends the CHLO. At this point, the client doesn't even wait for the server's reply and immediately starts sending encrypted application data. \cite{quic:crypto}
 
 \subsection{Congestion Control}
-QUIC does not reinvent the wheel when it comes to congestion control. At the time of this writing, it uses a modified implementation of TCP Cubic which is optimized for networks with high bandwidth and high latency. Since Linux 2.6.13, TCP Cubic is the default in the standard Linux distribution. QUIC expands on the TCP Cubic and primarily offers three advantages\cite{quic:draft} over it:
+QUIC does not reinvent the wheel when it comes to congestion control. At the time of this writing, it uses a modified implementation of TCP Cubic which is optimized for networks with high bandwidth and high latency. Since Linux 2.6.13, TCP Cubic is the default in the standard Linux distribution. QUIC expands on TCP Cubic and offers three advantages\cite{quic:draft} over it:
 
 \begin{enumerate}
 	\itemsep0em
@@ -107,10 +107,10 @@ QUIC does not reinvent the wheel when it comes to congestion control. At the tim
 \end{enumerate}
 
 \subsection{Full Authentication and Encryption}
-A well known security problem of TCP is that its headers are in plaintext and not authenticated, susecptible to injection and manipulation, by either attackers or middleboxes. Because QUIC packets ride on UDP datagrams, its packets are always authenticated and the payload is encrypted after the handshake. \cite{quic:draft}
+A well known security problem of TCP is that its headers are in plaintext and not authenticated, susceptible to injection and manipulation, by either attackers or middleboxes. Because QUIC packets ride on UDP datagrams, its packets are always authenticated and the payload is encrypted after the handshake. \cite{quic:draft}
 
 \subsection{Connection Migration}
-TCP connection is identified by the tuple \texttt{source address:port, destination address:port} specifying the end hosts, but not the logical connection between the client application and the web services it is accessing, making TCP unfriendly to mobile clients, e.g. a cell phone steps off WiFi network onto LTE or a laptop moving from one AP to another AP. QUIC addresses this problem by having the client assign a randomly generated 64-bit ID to the logical connection and it outlives all the migrations, enabling uninhibited migration across networks. \cite{quic:draft}
+TCP connection is identified by the tuple \texttt{source address:port, destination address:port} specifying the end hosts, but not the logical connection between the client application and the web services it is accessing.  This makes TCP unfriendly to mobile clients, e.g. a cell phone moving from WiFi network to LTE or a laptop transitioning from one AP to another AP. QUIC addresses this problem by having the client assign a randomly generated 64-bit ID to the logical connection, enabling transparent migrations between networks. \cite{quic:draft}
 
 \vspace*{-10pt}
 \begin{table}[]
@@ -130,7 +130,7 @@ Poll Mode Drivers    & 1GbE and 10GbE NIC drivers that work without asynchronous
 
 
 \section{DPDK and DPDK-ANS}
-DPDK is born out of a marriage between the need for software level packet processing at line rate on commodity hardware and continued enhancements introduced by newer generations of Intel microarchitecture. The reality is that NICs at 1/10/40/100 Gb are not uncommon on servers these days but plain vanilla linux kernel is ill equipped to unleash all of their potential. On the other hand, Intel increasingly offers hardware optimizations that promises high performance packet processing but are left mostly untapped by applications. As a result, Intel embedded those features into a set of library with simple API interface and a low overhead run time environment for application developers. Table \ref{tab:dpdkchallenges} summarizes the challenges and how DPDK overcome them. \cite{dpdk:presentation}
+DPDK is born out of a marriage between the need for software level packet processing at line rate on commodity hardware and continued enhancements introduced by newer generations of Intel microarchitecture. The reality is that NICs at 1/10/40/100 Gb are not uncommon on servers these days but plain vanilla linux kernel is ill equipped to unleash all of their potential. On the other hand, Intel increasingly offers hardware optimizations that promises high performance packet processing but are left mostly untapped by applications. As a result, Intel embedded those features into a set of libraries with simple API interface and a low overhead run time environment for application developers. Table \ref{tab:dpdkchallenges} summarizes the challenges and how DPDK overcome them. \cite{dpdk:presentation}
 
 \begin{figure}[]
 \centering
@@ -139,9 +139,9 @@ DPDK is born out of a marriage between the need for software level packet proces
 \label{fig:dpdk-archi}
 \end{figure} 
 
-DPDK's architecture can largely be broken down into 3 main components: data plane libraries and poll mode drivers(summarized in Table \ref{tab:dpdkcorelibs}), run time environment and the Environment Abstraction Layer(EAL). The run time environment is extremely low overhead and assigns core affinities to software threads which is allowed to run to completion. EAL is a service layer that provides its core libraries and applications a generic interface to system resources such as NICs, memory and PCI bus access, and logging. It straddles user space and kernel space. \cite{dpdk:programmerguide} \\
+DPDK's architecture can largely be broken down into 3 main components: data plane libraries and poll mode drivers (summarized in Table \ref{tab:dpdkcorelibs}), run time environment and the Environment Abstraction Layer (EAL). The run time environment has extremely low overhead and assigns core affinities to software threads which are allowed to run to completion. EAL is a service layer that provides its core libraries and applications a generic interface to system resources such as NICs, memory and PCI bus access, and logging. It straddles user space and kernel space. \cite{dpdk:programmerguide} 
 
-It is clear that DPDK only offers the highly optimized building blocks of a networking stack but just not an implemented one for us to use. It so happens that there is one on the market -- DPDK Accelerated Network Stack(\texttt{dpdk-ans}). It is a port of FreeBSD's TCP/IP stack to be run in userspace as a DPDK application and it offers a subset (as it is still in active development) of the familiar set of socket API's we've come to love.
+DPDK only offers the highly optimized building blocks of a networking stack, not an implemented one for us to use. It so happens that there is one on the market -- DPDK-ANS. It is a port of FreeBSD's TCP/IP stack to be run in userspace as a DPDK application and it offers a subset (as it is still in active development) of the familiar set of socket API's we've come to love.
 
 \begin{table*}[ht]
 \centering
@@ -154,24 +154,25 @@ OS can't keep up with NIC I/O interrupts & Poll Mode Drivers for NICs           
 Context switch has high overhead & Bind a SW thread to a HW execution context, and the thread runs to completion.                               \\ \hline
 \centering{Memory \& PCIe access is slow} & Perform batch read to amortize latency. Use SW or HW controlled prefetching. Align data structure to cache line size to minimize bandwidth usage. Ensure contiguous memory access in cache line size increments to minimize cache misses from evictions. Use Direct Data IO for PCIe access and read straight to cache.\\ \hline
 Locks/semaphores have high overhead & Use lock free data structures. \\ \hline
-Page faults are costly & Use 2MB or 1G Huge Pages in Linux to reduce TLB misses. \\ \hline
+Page table lookups are costly & Use 2MB or 1G Huge Pages in Linux to reduce TLB misses. \\ \hline
 \end{tabular}
 \end{table*}
 
-ANS fully utilizes DPDK's features. For example, it requires zero copy between NIC and the application. On NICs that support Receiver Side Scaling(RSS), the NIC distributes packets to different logical cores so that the same TCP flow go through the same core, minimizing the need for copying between cores. In addition, each core has its own UDP or TCP stack, making the implementation lock free. In addition, the socket layer tries to evenly distribute sockets to different logical cores so as to maximize the benefits of parallel processing. If there are two applications each using a socket, or a single application using two sockets, those sockets would be put on different cores. Figure \ref{fig:dpdk-archi} presents the complete picture of the logical building blocks of the DPDK TCP/IP stack. \cite{dpdkans:readme}
+ANS fully utilizes DPDK's features. For example, it allows zero copy packet transmission. On NICs that support Receiver Side Scaling (RSS), the NIC distributes packets to different logical cores so that the same TCP flow goes through the same core, minimizing the need for copying between cores. Each core has its own UDP or TCP stack, making the implementation lock free. Moreover, the socket layer tries to evenly distribute sockets to different logical cores so as to maximize the benefits of parallel processing. If there are two applications each using a socket, or a single application using two sockets, those sockets would be put on different cores. Figure \ref{fig:dpdk-archi} presents the complete picture of the logical building blocks of the DPDK-ANS TCP/IP stack. \cite{dpdkans:readme}
  
-While DPDK-ANS promises great performance gain, it also creates its unique problems. First, its socket API is imcomplete; particularly \texttt{recvmsg} and \texttt{sendmsg} aren't implemented. Secondly, its sockets, and their associated file descriptors, do not live in kernel's universe and therefore, we cannot use system asynchronous I/O facilities such as \texttt{epoll} and rely on its analogue in the DPDK-ANS universe. These restrictions created many challenges to us when we were trying to preserse as many functionalities as we could while operating within the bound of the DPDK-ANS.
+While DPDK-ANS promises great performance gain, it also creates its unique problems. First, its socket API is incomplete; particularly \texttt{recvmsg} and \texttt{sendmsg} aren't implemented. Secondly, its sockets, and their associated file descriptors, do not live in kernel's universe and therefore, we cannot use system asynchronous I/O facilities such as \texttt{epoll} and rely on its analogue in the DPDK-ANS universe. These restrictions created many challenges to us when we were trying to preserse as many functionalities as we could while operating within the bound of the DPDK-ANS.
 
 \begin{figure*}
 \centering
 \includegraphics[scale=0.28]{class.png}
 \caption{QUIC classes overview}
+\label{fig:quic-classes}
 \end{figure*}
 
 \section{Implementation}
-The QUIC protocol is folded into the Chromium project. Shipped with it is a pair of stock client and server implementation. Our end game was to isolate the protocol from the repo and swapped out all kernel socket calls by the client/server with \texttt{dpdk-ans} ones. 
+The QUIC protocol is folded into the Chromium project. Shipped with it is a pair of stock client and server implementation. Our goal is to swap out all kernel socket calls in the client/server with calls to DPDK-ANS. 
  
-First, to tease out the quic protocol implementation and its dependencies into a library is no small task. Luckily, there is a third party standalone library called \texttt{libquic}\footnote{Two months after we started using \texttt{libquic}, Google released an unofficial and unsupported \texttt{protoquic} standalone library contributed by the current QUIC developers as their side project. This repo is a lot heftier than \texttt{libquic}, and sparse with documentation. We decided not to migrate over.} that is built with few modifications and patches from the Chromium project. 
+First, we need to isoloate the QUIC protocol implementation from the Chromium repo. Luckily, there is a third party standalone library called \texttt{libquic}\footnote{Two months after we started using \texttt{libquic}, Google released an unofficial and unsupported \texttt{protoquic} standalone library contributed by the current QUIC developers as their side project. This repo is a lot heftier than \texttt{libquic}, and sparse with documentation. We decided not to migrate over.} that is built with few modifications and patches from the Chromium project. 
 
 Second, we have to make sure that the stock client/server still works with \texttt{libquic}. Unsurprisingly and unfortunately, we had very little success due to countless dependency issues after pulling in the stock implementations and trying to build the binary with \texttt{libquic}. Our initial progress was greatly thwarted. 
 
@@ -184,7 +185,7 @@ On construction, the \texttt{QuicClient} is handed a \texttt{EpollServer} and th
 
 After concluding with the initialization, the client attempts to connect to the server at the specified address. It first creates a                   \texttt{QuicDefaultPacketWriter} that uses, but may not own, the underlying socket file descriptor, and implements the \texttt{QuicPacketWriter} interface. Next, the client creates a \texttt{QuicConnection} and hands it a \texttt{QuicSession} that demultiplexes the connection among multiple \texttt{QuicStream}s. Lastly, the client use a dedicated \texttt{QuicCryptoStream} to perform the handshake.
 
-If successful, the client is ready to send and receive data from the server by creating and utilizing either a single or multiple streams. Incoming packets travel from the System Call side through \texttt{epoll} callback functions to client or server and onto the underlying protocol suite where states are kept for different streams. The reverse applies for outgoing packets.
+If successful, the client is ready to send and receive data from the server by creating and utilizing either a single or multiple streams. Incoming packets travel from the System Call side in Figure \ref{fig:quic-classes} through \texttt{epoll} callback functions to client or server and onto the underlying protocol suite where states are kept for different streams. The reverse applies for outgoing packets.
 
 \subsection{Socket Call Replacements}
 The protocol classes do not create or own any file descriptors and therefore, we are not too interested in them. On the other hand, socket and epoll system calls largely concentrated in \texttt{QuicSocketUtils} and \texttt{EpollServer}. 
@@ -200,12 +201,11 @@ which respectively ran the server and client processes for our benchmarking and 
 We ran our benchmarking both with the two VMs on different hosts,
 connected by a physical network link for realism,
 and with the two VMs on the same host, connected by a standard Linux virtual switch.
-Each VM had 4 virtual x86\_64 CPUs each and 4GB of RAM,
-and had two Intel Corporation 82540EM NICs, emulated by QEMU,
+Each VM had 4 virtual x86\_64 CPUs each and 4GB of RAM. 
+The VMs had two Intel Corporation 82540EM NICs, emulated by QEMU,
 one for traffic and one for control.
-The VMs ran Ubuntu 14.04,
-running Linux 3.13,
-Ubuntu package linux-generic-3.13.0-85.91.
+The VMs ran Ubuntu 14.04
+and Linux 3.13 (Ubuntu package linux-generic-3.13.0-85.91).
 
 The testing harness for our code ran a single server process on the server VM,
 and some number of client processes on the client VM.
@@ -217,44 +217,30 @@ The server process, meanwhile, just listens for connections,
 and immediately sends data followed by a FIN packet to each connecting client.
 
 We used a single server process and client process implementation with both 
-stock libquic using POSIX sockets
+stock client/server using POSIX sockets
 (referred to hereafter as Linux QUIC)
-and our modified libquic using DPDK
+and our modified client/server using DPDK
 (referred to hereafter as DPDK QUIC).
 We simply compiled the server and client with both Linux QUIC and DPDK QUIC.
 
-The server process was run under monitoring by the perf profiler.
-The perf profiler makes of hardware features and has strong Linux kernel support
+The server process was run under monitoring by the \texttt{perf} profiler.
+\texttt{perf} makes use of hardware features and has strong Linux kernel support
 to allow it to profile applications without impacting their performance.
-Therefore, we don't believe running under the perf profiler distorts our results.
-Running under perf allowed us to see how the performance profile of the server changed in different scenarios.
-Profiling with perf allowed us also to profile into the kernel,
+Therefore, we don't believe running under \texttt{perf} distorts our results.
+Running under a profiler allowed us to see how the performance profile of the server changed in different scenarios.
+\texttt{perf} specifically let our profile extend into the kernel,
 revealing how much time was spent in certain functions in the network stack,
 even down to the level of individual instructions.
 
 We also monitored activity on the server network interface,
-using ifstat on the VM host,
+using \texttt{ifstat} on the VM host,
 to determine the steady data transmission rate in each test scenario.
 
-We tested both Linux and DPDK QUIC clients with both Linux and DPDK QUIC servers,
-with various different amounts of data transmitted.
-The parameter controlling how much data was transmitted was the number of times we transmitted the 1300-octet fixed buffer that made up our data;
+We tested both Linux and DPDK QUIC clients against both Linux and DPDK QUIC servers,
+varying the amount of data transmitted.
+The parameter controlling how much data was transmitted was the number of times we sent the 1300-octet fixed buffer that made up our data;
 1300 octets roughly corresponds to the amount of data that could fit in a single packet,
 so this parameter roughly correponds to the number of packets sent per connection.
-
-\begin{figure}[bh]
-\centering
-\includegraphics[scale=0.5]{plot.png}
-\caption{Results of running benchmarks with different client/server setups (different hosts)}
-\label{fig:benchmark}
-\end{figure}
-
-\begin{figure}[bh]
-\centering
-\includegraphics[scale=0.5]{plot-adj.png}
-\caption{Results of running benchmarks with different client/server setups (same host)}
-\label{fig:benchmark-adj}
-\end{figure}
 
 Figure \ref{fig:benchmark} shows our measurements with the VMs on different hosts;
 Figure \ref{fig:benchmark-adj} shows our measurements with the VMs on the same host.
@@ -262,6 +248,20 @@ For comparison, these also show the results of benchmarking Apache under the sam
 
 As can be seen from the graph, when the server side of the benchmarking setup was using DPDK,
 we saw a significant performance increase in scenarios with moderately large data sizes.
+
+\begin{figure}[h]
+\centering
+\includegraphics[scale=0.5]{plot.png}
+\caption{Results of running benchmarks with different client/server setups (different hosts)}
+\label{fig:benchmark}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[scale=0.5]{plot-adj.png}
+\caption{Results of running benchmarks with different client/server setups (same host)}
+\label{fig:benchmark-adj}
+\end{figure}
 
 However, at a higher value of our transmission size parameter, the highest we tested,
 when one or both sides of the benchmarking setup are using DPDK,
@@ -278,17 +278,18 @@ it makes scalable design decisions that have high constant cost.
 
 To gain some insights, we can look at the profile of the server.
 We've attached to this writeup the top 5 function hotspots for the server in each scenario,
-as output by the perf profiler.
+as output by the \texttt{perf} profiler.
 Note that since DPDK runs its network stack in a separate process outside of the kernel,
 time spent in the network stack is not shown in the profile for the DPDK versions.
 We do see network stack functions such as \verb|e1000_xmit_frame| in the profile for the Linux versions,
-courtesy of perf's ability to profile into the kernel.
+courtesy of \texttt{perf}'s ability to profile into the kernel.
 
 As the amount of data sent in a single connection increases,
 the relative overhead of the constant connection setup time decreases.
 This is visible in our profiling.
 For benchmarking scenarios with small amounts of data, the hotspots are in cryptographic functions,
-such as \verb|freduce_coefficients|, \verb|fproduct|, and other math functions starting with ``f''
+such as \\
+\verb|freduce_coefficients|, \verb|fproduct|, and other math functions starting with ``f''
 (these functions are operations on field elements).
 In scenarios with larger amounts of data,
 network operations and datastructure manipulation become more significant,
@@ -306,11 +307,11 @@ is already well-tuned for performance,
 the obvious place to optimize in search of performance improvements at all scales is the network stack.
 Our results show that this can be a fruitful approach.
 
-As well, QUIC internal datastructure manipulations pose a great scalability problem;
+QUIC internal datastructure manipulations pose a great scalability problem;
 as the amount of data being sent increases,
 these datastructure manipulations rapidly become the biggest hotspots.
 For the development of a scalable QUIC server, optimizations of these datastructures
-- in particular the ReliableQuicStream pending data list -
+- in particular the pending data list -
 is critical.
 
 \section{Future Work}
@@ -318,7 +319,7 @@ is critical.
 Future work will include investigating some of the behaviors uncovered in our benchmarking.
 In particular, the improved performance but decreased scalability of the DPDK-based QUIC stack
 is not yet well understood;
-why does DPDK performance greatly decrease over a certain per-connection-data-size?
+why does DPDK performance greatly decrease over a certain transmission size?
 Profiling and benchmarking DPDK itself will be helpful in determining the cause of this behavior.
 
 Optimizations on the internal QUIC datastructures,
@@ -329,11 +330,11 @@ DPDK has a strong framework for parallel processing of packets;
 however, the existing QUIC stack is not well suited for parallel procssing.
 Making the QUIC stack support multithreaded or multiprocess operation would be very helpful.
 
-More prosaically, porting our changes to the QUIC stack from libquic
-to the Google-associated protoquic
+More prosaically, porting our changes to the QUIC stack from \texttt{libquic}
+to the Google-associated \texttt{protoquic}
 will be important to give our work a greater impact;
 it is also valuable as a way to pickup performance improvements and bugfixes that have happened upstream
-since our version of libquic was last updated.
+since our version of \texttt{libquic} was last updated.
 
 \section{Conclusions}
 We successfully modified the stock QUIC client/server to run on DPDK-ANS. We measured throughput between different combinations of client/server and evaluated their performance.
