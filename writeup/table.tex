@@ -17,17 +17,17 @@
 \hline
       & dpdk/dpdk                          & dpdk/linux                    & linux/dpdk                         & linux/linux                   \\ \hline\hline
       
-10000 & 22.59\% operator++()               & 26.28\% e1000\_xmit\_frame    & 22.62\% operator++()               & 23.81\% e1000\_xmit\_frame    \\ \hline
-      & 14.47\% CRYPTO\_chacha\_20         & 12.26\% operator++()          & 14.24\% CRYPTO\_chacha\_20         & 14.04\% operator++()          \\ \hline
-      & 9.50\% operator!=                  & 8.07\% CRYPTO\_chacha\_20     & 9.56\% operator!=                  & 8.64\% CRYPTO\_chacha\_20     \\ \hline
-      & 7.28\% iterator comparison         & 5.84\% operator!=             & 7.32\% iterator comparison         & 6.69\% operator!=             \\ \hline
+10000 & 22.59\% List$\langle$PendingData$\rangle$::++               & 26.28\% e1000\_xmit\_frame    & 22.62\% List$\langle$PendingData$\rangle$::++               & 23.81\% e1000\_xmit\_frame    \\ \hline
+      & 14.47\% CRYPTO\_chacha\_20         & 12.26\% List$\langle$PendingData$\rangle$::++          & 14.24\% CRYPTO\_chacha\_20         & 14.04\% List$\langle$PendingData$\rangle$::++          \\ \hline
+      & 9.50\% List$\langle$PendingData$\rangle$::!=                  & 8.07\% CRYPTO\_chacha\_20     & 9.56\% List$\langle$PendingData$\rangle$::!=                  & 8.64\% CRYPTO\_chacha\_20     \\ \hline
+      & 7.28\% iterator comparison         & 5.84\% List$\langle$PendingData$\rangle$::!=             & 7.32\% iterator comparison         & 6.69\% List$\langle$PendingData$\rangle$::!=             \\ \hline
       & 6.74\% poly1305\_blocks            & 4.91\% e1000\_clean           & 6.67\% poly1305\_blocks            & 4.85\% iterator comparison    \\ \hline\hline
       
 1000  & 21.56\% CRYPTO\_chacha\_20         & 29.06\% e1000\_xmit\_frame    & 21.41\% CRYPTO\_chacha\_20         & 35.69\% e1000\_xmit\_frame    \\ \hline
       & 10.04\% poly1305\_blocks           & 12.44\% CRYPTO\_chacha\_20    & 9.94\% poly1305\_blocks            & 10.12\% e1000\_clean          \\ \hline
-      & 2.81\% operator++()                & 5.80\% poly1305\_blocks       & 2.88\% operator++()                & 8.33\% CRYPTO\_chacha\_20     \\ \hline
+      & 2.81\% List$\langle$PendingData$\rangle$::++                & 5.80\% poly1305\_blocks       & 2.88\% List$\langle$PendingData$\rangle$::++                & 8.33\% CRYPTO\_chacha\_20     \\ \hline
       & 1.80\% \_\_memcpy\_sse2\_unaligned & 2.22\% e1000\_clean           & 1.85\% \_\_memcpy\_sse2\_unaligned & 5.48\% \_\_do\_softirq        \\ \hline
-      & 1.74\% poly1305\_combine           & 1.75\% operator++()           & 1.70\% poly1305\_combine           & 3.73\% poly1305\_blocks       \\ \hline\hline
+      & 1.74\% poly1305\_combine           & 1.75\% List$\langle$PendingData$\rangle$::++           & 1.70\% poly1305\_combine           & 3.73\% poly1305\_blocks       \\ \hline\hline
       
 100   & 15.06\% CRYPTO\_chacha\_20         & 32.52\% e1000\_xmit\_frame    & 15.15\% CRYPTO\_chacha\_20         & 32.98\% e1000\_xmit\_frame    \\ \hline
       & 11.02\% freduce\_coefficients      & 7.65\% CRYPTO\_chacha\_20     & 10.95\% freduce\_coefficients      & 9.64\% e1000\_clean           \\ \hline
