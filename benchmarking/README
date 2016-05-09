@@ -1,0 +1,26 @@
+To reproduce our results, first create two VMs, running the version of Ubuntu we used (in our writeup), using libvirt.
+To get our exact hardware configuration, use the server-quic.xml and client-quic.xml libvirt domain XML files in this directory to define the VMs.
+You'll need an Ubuntu disk image; the "virt-builder" tool may be useful.
+(Each VM also was configured with additional empty storage, used for scratch work)
+
+Make sure the two VMs are accessible from each other, as well as accessible from the VM host,
+and that passwordless SSH authentication is set up (as ssh will be used to run the benchmarks).
+
+Build and install DPDK, QUIC and our code, as documented in the readme outside this folder.
+
+Inspect the run_client.sh and run_server.sh scripts, and ensure that they have the correct paths to the executables they run, (the paths are hardcoded)
+and will correctly run the client and server code.
+Place them on the client and server respectively in /root/, which is where the run_sample.sh script expects them.
+(note that we run the processes for each scenario in a tmux session to allow inspecting the processes; the session is killed when the scenario ends)
+
+Then, run test_all.sh on the host (which in turn runs run_sample.sh).
+
+This will generate a directory tree on the host and on the server;
+the host will contain the output of ifstat for each scenario, and the server will contain the profile output for each scenario.
+
+These directory trees can be safely merged, so feel free to rsync the directory from the server on to the host.
+
+You can run tablify_ifstats.sh now to automatically generate a table of the ifstat output which can be used with plot.gnuplot.
+You can also run process_perfdata.sh to get the top 5 functions for each profile.
+
+For the Apache benchmarking to work, start a webserver on quic-server.

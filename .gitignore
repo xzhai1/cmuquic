@@ -26,3 +26,10 @@
 *.exe
 *.out
 *.app
+/quic_perf_server
+/tcp_perf_client
+/tcp_perf_server
+/writeup/table.aux
+/writeup/table.log
+/writeup/writeup.aux
+/writeup/writeup.log

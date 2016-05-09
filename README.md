@@ -12,7 +12,7 @@ We did our measurement on VM's because
 
 We tried to setup our testbed on [Emulab](http://www.emulab.net/index.php3) becuase it is free to us and you can easily set up a topology for testing. The problem was that DPDK couldn't build on the Xeon processors they have, which doesn't support ``SSE4_2``. We also tried to setup our testbed on AWS using its free tier micro instance. The stumbling block is that the NIC virtualization is incompatible with DPDK; while it builds fine on the EC2 instance, it doesn't support the interfaces it has. AWS's NIC virtualization is too much of a black box to us and at this point, we decided to just put up 2 VM's on some bare metal we so happened to have access to.
 
-Make sure you give it enough memory, 4GB at least, and at least 2 compatible ethernet interfaces. We used ``e1000`` as the device model. The reason for 2 interfaces is that when one is bind to ``DPDK`` driver, it won't be available to you for ssh. [comment]: **Spencer, please add in the VM specs here. We may want to put up the VM image here**
+The precise setup of our hardware is described in /benchmarking/README.
 
 On a virgin environment, you are going to ``sudo apt-get install`` a lot of things.
 
@@ -171,4 +171,6 @@ Then build it:
     ninja
 
 ## Reproducing the Result
-How to build our repo
+
+Now that the server and client have been built on the server and client VMs,
+you can continue with the instructions in /benchmarking/README to reproduce our measurements.
